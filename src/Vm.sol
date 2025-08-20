@@ -703,6 +703,10 @@ interface VmSafe {
     /// Returns the block header in the same format as `cast block <block_number> --raw`.
     function getRawBlockHeader(uint256 blockNumber) external view returns (bytes memory rlpHeader);
 
+    /// Gets the RLP encoded block header for a given block number.
+    /// Returns the block header in the same format as `cast block <block_number> --raw`.
+    function getRawBlockHeader(uint256 blockNumber) external view returns (bytes memory rlpHeader);
+
     /// Gets all the recorded logs.
     function getRecordedLogs() external view returns (Log[] memory logs);
 
