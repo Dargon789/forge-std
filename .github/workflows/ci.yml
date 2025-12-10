@@ -31,7 +31,7 @@ jobs:
           - --use solc:0.6.2
           - --use solc:0.6.12
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: foundry-rs/foundry-toolchain@v1
@@ -59,19 +59,14 @@ jobs:
       matrix:
         toolchain: [stable, nightly]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: foundry-rs/foundry-toolchain@v1
         with:
           version: ${{ matrix.toolchain }}
       - run: forge --version
-      - run: |
-          if [ "${{ matrix.toolchain }}" = "stable" ]; then
-            forge test -vvv --no-match-path "test/Config.t.sol"
-          else
-            forge test -vvv
-          fi
+      - run: forge test -vvv
 
   fmt:
     runs-on: ubuntu-latest
@@ -79,7 +74,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: foundry-rs/foundry-toolchain@v1
@@ -92,10 +87,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: crate-ci/typos@80c8a4945eec0f6d464eaf9e65ed98ef085283d1 # v1
+      - uses: crate-ci/typos@2d0ce569feab1f8752f1dde43cc2f2aa53236e06 # v1
 
   codeql:
     name: Analyze (${{ matrix.language }})
@@ -112,7 +107,7 @@ jobs:
             build-mode: none
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: Initialize CodeQL
