@@ -76,7 +76,7 @@ contract TestContract is Test {
     }
 
     function testFindExists() public {
-        // Lets say we want to find the slot for the public
+        // Let's say we want to find the slot for the public
         // variable `exists`. We just pass in the function selector
         // to the `find` command
         uint256 slot = stdstore.target(address(test)).sig("exists()").find();
@@ -84,7 +84,7 @@ contract TestContract is Test {
     }
 
     function testWriteExists() public {
-        // Lets say we want to write to the slot for the public
+        // Let's say we want to write to the slot for the public
         // variable `exists`. We just pass in the function selector
         // to the `checked_write` command
         stdstore.target(address(test)).sig("exists()").checked_write(100);
@@ -173,7 +173,7 @@ This is a wrapper over miscellaneous cheatcodes that need wrappers to be more de
 
 ```solidity
 
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
