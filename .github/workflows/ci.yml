@@ -1,7 +1,5 @@
 name: CI
-
 permissions: {}
-
 on:
   workflow_dispatch:
   pull_request:
