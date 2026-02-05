@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.6.2 <0.9.0;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+pragma solidity >=0.8.13 <0.9.0;
 
 library stdMath {
     int256 private constant INT256_MIN = -57896044618658097711785492504343953926634992332820282019728792003956564819968;
@@ -29,6 +29,8 @@ library stdMath {
     }
 
     function percentDelta(uint256 a, uint256 b) internal pure returns (uint256) {
+        // Prevent division by zero
+        require(b != 0, "stdMath percentDelta(uint256,uint256): Divisor is zero");
         uint256 absDelta = delta(a, b);
 
         return absDelta * 1e18 / b;
@@ -37,6 +39,8 @@ library stdMath {
     function percentDelta(int256 a, int256 b) internal pure returns (uint256) {
         uint256 absDelta = delta(a, b);
         uint256 absB = abs(b);
+        // Prevent division by zero
+        require(absB != 0, "stdMath percentDelta(int256,int256): Divisor is zero");
 
         return absDelta * 1e18 / absB;
     }

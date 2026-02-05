@@ -1,7 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.6.0 <0.9.0;
-
-pragma experimental ABIEncoderV2;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+pragma solidity >=0.8.13 <0.9.0;
 
 import {VmSafe} from "./Vm.sol";
 
@@ -10,16 +8,16 @@ import {VmSafe} from "./Vm.sol";
 // ```
 // using stdToml for string;
 // string memory toml = vm.readFile("<some_path>");
-// toml.readUint("<json_path>");
+// toml.readUint("<toml_path>");
 // ```
 // To write:
 // ```
 // using stdToml for string;
-// string memory json = "json";
-// json.serialize("a", uint256(123));
-// string memory semiFinal = json.serialize("b", string("test"));
-// string memory finalJson = json.serialize("c", semiFinal);
-// finalJson.write("<some_path>");
+// string memory toml = "toml";
+// toml.serialize("a", uint256(123));
+// string memory semiFinal = toml.serialize("b", string("test"));
+// string memory finalToml = toml.serialize("c", semiFinal);
+// finalToml.write("<some_path>");
 // ```
 
 library stdToml {
@@ -197,10 +195,7 @@ library stdToml {
         return vm.serializeBool(jsonKey, key, value);
     }
 
-    function serialize(string memory jsonKey, string memory key, bool[] memory value)
-        internal
-        returns (string memory)
-    {
+    function serialize(string memory jsonKey, string memory key, bool[] memory value) internal returns (string memory) {
         return vm.serializeBool(jsonKey, key, value);
     }
 
@@ -259,10 +254,7 @@ library stdToml {
         return vm.serializeBytes(jsonKey, key, value);
     }
 
-    function serialize(string memory jsonKey, string memory key, string memory value)
-        internal
-        returns (string memory)
-    {
+    function serialize(string memory jsonKey, string memory key, string memory value) internal returns (string memory) {
         return vm.serializeString(jsonKey, key, value);
     }
 

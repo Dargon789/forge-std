@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.6.2 <0.9.0;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+pragma solidity >=0.8.13 <0.9.0;
 
 import {VmSafe} from "./Vm.sol";
 
@@ -7,7 +7,7 @@ import {VmSafe} from "./Vm.sol";
  * StdChains provides information about EVM compatible chains that can be used in scripts/tests.
  * For each chain, the chain's name, chain ID, and a default RPC URL are provided. Chains are
  * identified by their alias, which is the same as the alias in the `[rpc_endpoints]` section of
- * the `foundry.toml` file. For best UX, ensure the alias in the `foundry.toml` file match the
+ * the `foundry.toml` file. For best UX, ensure the alias in the `foundry.toml` file matches the
  * alias used in this contract, which can be found as the first argument to the
  * `setChainWithDefaultRpcUrl` call in the `initializeStdChains` function.
  *
@@ -58,9 +58,9 @@ abstract contract StdChains {
 
     // Maps from the chain's alias (matching the alias in the `foundry.toml` file) to chain data.
     mapping(string => Chain) private chains;
-    // Maps from the chain's alias to it's default RPC URL.
+    // Maps from the chain's alias to its default RPC URL.
     mapping(string => string) private defaultRpcUrls;
-    // Maps from a chain ID to it's alias.
+    // Maps from a chain ID to its alias.
     mapping(uint256 => string) private idToAlias;
 
     bool private fallbackToDefaultRpcUrls = true;
@@ -175,8 +175,7 @@ abstract contract StdChains {
                     (errHash != keccak256(oldNotFoundError) && errHash != keccak256(newNotFoundError))
                         || bytes(chain.rpcUrl).length == 0
                 ) {
-                    /// @solidity memory-safe-assembly
-                    assembly {
+                    assembly ("memory-safe") {
                         revert(add(32, err), mload(err))
                     }
                 }
@@ -196,13 +195,12 @@ abstract contract StdChains {
 
         // If adding an RPC here, make sure to test the default RPC URL in `test_Rpcs` in `StdChains.t.sol`
         setChainWithDefaultRpcUrl("anvil", ChainData("Anvil", 31337, "http://127.0.0.1:8545"));
-        setChainWithDefaultRpcUrl(
-            "mainnet", ChainData("Mainnet", 1, "https://eth-mainnet.alchemyapi.io/v2/pwc5rmJhrdoaSEfimoKEmsvOjKSmPDrP")
-        );
+        setChainWithDefaultRpcUrl("mainnet", ChainData("Mainnet", 1, "https://eth.llamarpc.com"));
         setChainWithDefaultRpcUrl(
             "sepolia", ChainData("Sepolia", 11155111, "https://sepolia.infura.io/v3/b9794ad1ddf84dfb8c34d6bb5dca2001")
         );
         setChainWithDefaultRpcUrl("holesky", ChainData("Holesky", 17000, "https://rpc.holesky.ethpandaops.io"));
+        setChainWithDefaultRpcUrl("hoodi", ChainData("Hoodi", 560048, "https://rpc.hoodi.ethpandaops.io"));
         setChainWithDefaultRpcUrl("optimism", ChainData("Optimism", 10, "https://mainnet.optimism.io"));
         setChainWithDefaultRpcUrl(
             "optimism_sepolia", ChainData("Optimism Sepolia", 11155420, "https://sepolia.optimism.io")
@@ -249,6 +247,48 @@ abstract contract StdChains {
         setChainWithDefaultRpcUrl("flare", ChainData("Flare", 14, "https://flare-api.flare.network/ext/C/rpc"));
         setChainWithDefaultRpcUrl(
             "flare_coston2", ChainData("Flare Coston2", 114, "https://coston2-api.flare.network/ext/C/rpc")
+        );
+
+        setChainWithDefaultRpcUrl("ink", ChainData("Ink", 57073, "https://rpc-gel.inkonchain.com"));
+        setChainWithDefaultRpcUrl(
+            "ink_sepolia", ChainData("Ink Sepolia", 763373, "https://rpc-gel-sepolia.inkonchain.com")
+        );
+
+        setChainWithDefaultRpcUrl("mode", ChainData("Mode", 34443, "https://mode.drpc.org"));
+        setChainWithDefaultRpcUrl("mode_sepolia", ChainData("Mode Sepolia", 919, "https://sepolia.mode.network"));
+
+        setChainWithDefaultRpcUrl("zora", ChainData("Zora", 7777777, "https://zora.drpc.org"));
+        setChainWithDefaultRpcUrl(
+            "zora_sepolia", ChainData("Zora Sepolia", 999999999, "https://sepolia.rpc.zora.energy")
+        );
+
+        setChainWithDefaultRpcUrl("race", ChainData("Race", 6805, "https://racemainnet.io"));
+        setChainWithDefaultRpcUrl("race_sepolia", ChainData("Race Sepolia", 6806, "https://racemainnet.io"));
+
+        setChainWithDefaultRpcUrl("metal", ChainData("Metal", 1750, "https://metall2.drpc.org"));
+        setChainWithDefaultRpcUrl("metal_sepolia", ChainData("Metal Sepolia", 1740, "https://testnet.rpc.metall2.com"));
+
+        setChainWithDefaultRpcUrl("binary", ChainData("Binary", 624, "https://rpc.zero.thebinaryholdings.com"));
+        setChainWithDefaultRpcUrl(
+            "binary_sepolia", ChainData("Binary Sepolia", 625, "https://rpc.zero.thebinaryholdings.com")
+        );
+
+        setChainWithDefaultRpcUrl("orderly", ChainData("Orderly", 291, "https://rpc.orderly.network"));
+        setChainWithDefaultRpcUrl(
+            "orderly_sepolia", ChainData("Orderly Sepolia", 4460, "https://testnet-rpc.orderly.org")
+        );
+
+        setChainWithDefaultRpcUrl("unichain", ChainData("Unichain", 130, "https://mainnet.unichain.org"));
+        setChainWithDefaultRpcUrl(
+            "unichain_sepolia", ChainData("Unichain Sepolia", 1301, "https://sepolia.unichain.org")
+        );
+
+        setChainWithDefaultRpcUrl("tempo", ChainData("Tempo", 4217, "https://rpc.mainnet.tempo.xyz"));
+        setChainWithDefaultRpcUrl(
+            "tempo_moderato", ChainData("Tempo Moderato", 42431, "https://rpc.moderato.tempo.xyz")
+        );
+        setChainWithDefaultRpcUrl(
+            "tempo_andantino", ChainData("Tempo Andantino", 42429, "https://rpc.testnet.tempo.xyz")
         );
     }
 

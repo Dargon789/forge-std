@@ -1,11 +1,8 @@
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.6.2 <0.9.0;
-
-pragma experimental ABIEncoderV2;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+pragma solidity >=0.8.13 <0.9.0;
 
 import {IMulticall3} from "./interfaces/IMulticall3.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
-import {MockERC721} from "./mocks/MockERC721.sol";
+import {StdConstants} from "./StdConstants.sol";
 import {VmSafe} from "./Vm.sol";
 
 abstract contract StdUtils {
@@ -13,7 +10,6 @@ abstract contract StdUtils {
                                      CONSTANTS
     //////////////////////////////////////////////////////////////////////////*/
 
-    IMulticall3 private constant multicall = IMulticall3(0xcA11bde05977b3631167028862bE2a173976CA11);
     VmSafe private constant vm = VmSafe(address(uint160(uint256(keccak256("hevm cheat code")))));
     address private constant CONSOLE2_ADDRESS = 0x000000000000000000636F6e736F6c652e6c6f67;
     uint256 private constant INT256_MIN_ABS =
@@ -22,9 +18,6 @@ abstract contract StdUtils {
         115792089237316195423570985008687907852837564279074904382605163141518161494337;
     uint256 private constant UINT256_MAX =
         115792089237316195423570985008687907853269984665640564039457584007913129639935;
-
-    // Used by default when deploying with create2, https://github.com/Arachnid/deterministic-deployment-proxy.
-    address private constant CREATE2_FACTORY = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
     /*//////////////////////////////////////////////////////////////////////////
                                  INTERNAL FUNCTIONS
@@ -59,7 +52,6 @@ abstract contract StdUtils {
 
     function bound(uint256 x, uint256 min, uint256 max) internal pure virtual returns (uint256 result) {
         result = _bound(x, min, max);
-        console2_log_StdUtils("Bound result", result);
     }
 
     function _bound(int256 x, int256 min, int256 max) internal pure virtual returns (int256 result) {
@@ -84,7 +76,6 @@ abstract contract StdUtils {
 
     function bound(int256 x, int256 min, int256 max) internal pure virtual returns (int256 result) {
         result = _bound(x, min, max);
-        console2_log_StdUtils("Bound result", vm.toString(result));
     }
 
     function boundPrivateKey(uint256 privateKey) internal pure virtual returns (uint256 result) {
@@ -97,7 +88,6 @@ abstract contract StdUtils {
     }
 
     /// @dev Compute the address a contract will be deployed at for a given deployer address and nonce
-    /// @notice adapted from Solmate implementation (https://github.com/Rari-Capital/solmate/blob/main/src/utils/LibRLP.sol)
     function computeCreateAddress(address deployer, uint256 nonce) internal pure virtual returns (address) {
         console2_log_StdUtils("computeCreateAddress is deprecated. Please use vm.computeCreateAddress instead.");
         return vm.computeCreateAddress(deployer, nonce);
@@ -117,21 +107,6 @@ abstract contract StdUtils {
     function computeCreate2Address(bytes32 salt, bytes32 initCodeHash) internal pure returns (address) {
         console2_log_StdUtils("computeCreate2Address is deprecated. Please use vm.computeCreate2Address instead.");
         return vm.computeCreate2Address(salt, initCodeHash);
-    }
-
-    /// @dev returns an initialized mock ERC20 contract
-    function deployMockERC20(string memory name, string memory symbol, uint8 decimals)
-        internal
-        returns (MockERC20 mock)
-    {
-        mock = new MockERC20();
-        mock.initialize(name, symbol, decimals);
-    }
-
-    /// @dev returns an initialized mock ERC721 contract
-    function deployMockERC721(string memory name, string memory symbol) internal returns (MockERC721 mock) {
-        mock = new MockERC721();
-        mock.initialize(name, symbol);
     }
 
     /// @dev returns the hash of the init code (creation code + no args) used in CREATE2 with no constructor arguments
@@ -163,12 +138,12 @@ abstract contract StdUtils {
         uint256 length = addresses.length;
         IMulticall3.Call[] memory calls = new IMulticall3.Call[](length);
         for (uint256 i = 0; i < length; ++i) {
-            // 0x70a08231 = bytes4("balanceOf(address)"))
+            // 0x70a08231 = bytes4(keccak256("balanceOf(address)"))
             calls[i] = IMulticall3.Call({target: token, callData: abi.encodeWithSelector(0x70a08231, (addresses[i]))});
         }
 
         // Make the aggregate call.
-        (, bytes[] memory returnData) = multicall.aggregate(calls);
+        (, bytes[] memory returnData) = StdConstants.MULTICALL3_ADDRESS.aggregate(calls);
 
         // ABI decode the return data and return the balances.
         balances = new uint256[](length);
@@ -205,8 +180,7 @@ abstract contract StdUtils {
     function _sendLogPayloadView(bytes memory payload) private view {
         uint256 payloadLength = payload.length;
         address consoleAddress = CONSOLE2_ADDRESS;
-        /// @solidity memory-safe-assembly
-        assembly {
+        assembly ("memory-safe") {
             let payloadStart := add(payload, 32)
             let r := staticcall(gas(), consoleAddress, payloadStart, payloadLength, 0, 0)
         }

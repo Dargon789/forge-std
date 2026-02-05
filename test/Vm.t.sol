@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0 <0.9.0;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+pragma solidity >=0.8.13 <0.9.0;
 
 import {Test} from "../src/Test.sol";
 import {Vm, VmSafe} from "../src/Vm.sol";
@@ -9,10 +9,10 @@ import {Vm, VmSafe} from "../src/Vm.sol";
 // added to or removed from Vm or VmSafe.
 contract VmTest is Test {
     function test_VmInterfaceId() public pure {
-        assertEq(type(Vm).interfaceId, bytes4(0x329891d9), "Vm");
+        assertEq(type(Vm).interfaceId, bytes4(0xe835828d), "Vm");
     }
 
     function test_VmSafeInterfaceId() public pure {
-        assertEq(type(VmSafe).interfaceId, bytes4(0xb09496a4), "VmSafe");
+        assertEq(type(VmSafe).interfaceId, bytes4(0x444fe6af), "VmSafe");
     }
 }

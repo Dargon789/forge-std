@@ -1,7 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.6.2 <0.9.0;
-
-pragma experimental ABIEncoderV2;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+pragma solidity >=0.8.13 <0.9.0;
 
 import {StdStorage, stdStorage} from "./StdStorage.sol";
 import {console2} from "./console2.sol";
@@ -16,7 +14,7 @@ abstract contract StdCheatsSafe {
     bool private gasMeteringOff;
 
     // Data structures to parse Transaction objects from the broadcast artifact
-    // that conform to EIP1559. The Raw structs is what is parsed from the JSON
+    // that conform to EIP1559. The Raw structs are what are parsed from the JSON
     // and then converted to the one that is used by the user for better UX.
 
     struct RawTx1559 {
@@ -65,7 +63,7 @@ abstract contract StdCheatsSafe {
     }
 
     // Data structures to parse Transaction objects from the broadcast artifact
-    // that DO NOT conform to EIP1559. The Raw structs is what is parsed from the JSON
+    // that DO NOT conform to EIP1559. The Raw structs are what are parsed from the JSON
     // and then converted to the one that is used by the user for better UX.
 
     struct TxLegacy {
@@ -326,7 +324,7 @@ abstract contract StdCheatsSafe {
         vm.assume(addr < address(0x1) || addr > address(0xff));
 
         // forgefmt: disable-start
-        if (chainId == 10 || chainId == 420) {
+        if (chainId == 10 || chainId == 420 || chainId == 11155420) {
             // https://github.com/ethereum-optimism/optimism/blob/eaa371a0184b56b7ca6d9eb9cb0a2b78b2ccd864/op-bindings/predeploys/addresses.go#L6-L21
             vm.assume(addr < address(0x4200000000000000000000000000000000000000) || addr > address(0x4200000000000000000000000000000000000800));
         } else if (chainId == 42161 || chainId == 421613) {
@@ -347,6 +345,18 @@ abstract contract StdCheatsSafe {
             addr != address(vm) && addr != 0x000000000000000000636F6e736F6c652e6c6f67
                 && addr != 0x4e59b44847b379578588920cA78FbF26c0B4956C
         );
+    }
+
+    function assumeUnusedAddress(address addr) internal view virtual {
+        uint256 size;
+        assembly {
+            size := extcodesize(addr)
+        }
+        vm.assume(size == 0);
+
+        assumeNotPrecompile(addr);
+        assumeNotZeroAddress(addr);
+        assumeNotForgeAddress(addr);
     }
 
     function readEIP1559ScriptArtifact(string memory path)
@@ -380,6 +390,7 @@ abstract contract StdCheatsSafe {
     function rawToConvertedEIPTx1559(RawTx1559 memory rawTx) internal pure virtual returns (Tx1559 memory) {
         Tx1559 memory transaction;
         transaction.arguments = rawTx.arguments;
+        transaction.contractAddress = rawTx.contractAddress;
         transaction.contractName = rawTx.contractName;
         transaction.functionSig = rawTx.functionSig;
         transaction.hash = rawTx.hash;
@@ -489,8 +500,7 @@ abstract contract StdCheatsSafe {
     // e.g. `deployCode(code, abi.encode(arg1,arg2,arg3))`
     function deployCode(string memory what, bytes memory args) internal virtual returns (address addr) {
         bytes memory bytecode = abi.encodePacked(vm.getCode(what), args);
-        /// @solidity memory-safe-assembly
-        assembly {
+        assembly ("memory-safe") {
             addr := create(0, add(bytecode, 0x20), mload(bytecode))
         }
 
@@ -499,8 +509,7 @@ abstract contract StdCheatsSafe {
 
     function deployCode(string memory what) internal virtual returns (address addr) {
         bytes memory bytecode = vm.getCode(what);
-        /// @solidity memory-safe-assembly
-        assembly {
+        assembly ("memory-safe") {
             addr := create(0, add(bytecode, 0x20), mload(bytecode))
         }
 
@@ -510,8 +519,7 @@ abstract contract StdCheatsSafe {
     /// @dev deploy contract with value on construction
     function deployCode(string memory what, bytes memory args, uint256 val) internal virtual returns (address addr) {
         bytes memory bytecode = abi.encodePacked(vm.getCode(what), args);
-        /// @solidity memory-safe-assembly
-        assembly {
+        assembly ("memory-safe") {
             addr := create(val, add(bytecode, 0x20), mload(bytecode))
         }
 
@@ -520,8 +528,7 @@ abstract contract StdCheatsSafe {
 
     function deployCode(string memory what, uint256 val) internal virtual returns (address addr) {
         bytes memory bytecode = vm.getCode(what);
-        /// @solidity memory-safe-assembly
-        assembly {
+        assembly ("memory-safe") {
             addr := create(val, add(bytecode, 0x20), mload(bytecode))
         }
 
@@ -645,11 +652,11 @@ abstract contract StdCheats is StdCheatsSafe {
 
     // Skip forward or rewind time by the specified number of seconds
     function skip(uint256 time) internal virtual {
-        vm.warp(block.timestamp + time);
+        vm.warp(vm.getBlockTimestamp() + time);
     }
 
     function rewind(uint256 time) internal virtual {
-        vm.warp(block.timestamp - time);
+        vm.warp(vm.getBlockTimestamp() - time);
     }
 
     // Setup a prank from an address that has some ether
@@ -703,6 +710,7 @@ abstract contract StdCheats is StdCheatsSafe {
     }
 
     function changePrank(address msgSender, address txOrigin) internal virtual {
+        console2_log_StdCheats("changePrank is deprecated. Please use vm.startPrank instead.");
         vm.stopPrank();
         vm.startPrank(msgSender, txOrigin);
     }
@@ -759,7 +767,7 @@ abstract contract StdCheats is StdCheatsSafe {
             (, bytes memory totSupData) = token.staticcall(abi.encodeWithSelector(0xbd85b039, id));
             require(
                 totSupData.length != 0,
-                "StdCheats deal(address,address,uint,uint,bool): target contract is not ERC1155Supply."
+                "StdCheats dealERC1155(address,address,uint256,uint256,bool): target contract is not ERC1155Supply."
             );
             uint256 totSup = abi.decode(totSupData, (uint256));
             if (give < prevBal) {
@@ -774,7 +782,7 @@ abstract contract StdCheats is StdCheatsSafe {
     function dealERC721(address token, address to, uint256 id) internal virtual {
         // check if token id is already minted and the actual owner.
         (bool successMinted, bytes memory ownerData) = token.staticcall(abi.encodeWithSelector(0x6352211e, id));
-        require(successMinted, "StdCheats deal(address,address,uint,bool): id not minted.");
+        require(successMinted, "StdCheats dealERC721(address,address,uint256): id not minted.");
 
         // get owner current balance
         (, bytes memory fromBalData) =
