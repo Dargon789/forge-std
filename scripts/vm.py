@@ -99,7 +99,7 @@ def main():
     out += pp.finish()
 
     # Compatibility with <0.8.0
-    def memory_to_calldata(m: re.Match) -> str:
+    def memory_to_calldata(m: re.Match) -> f:
         return " calldata " + m.group(1)
 
     out = re.sub(r" memory (.*returns)", memory_to_calldata, out)
