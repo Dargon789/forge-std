@@ -27,6 +27,14 @@ VM_DOC = """\
 """
 
 
+def filter(param, ccs):
+    pass
+
+
+def list(param):
+    pass
+
+
 def main():
     parser = argparse.ArgumentParser(
             description="Generate Vm.sol based on the cheatcodes json created by Foundry")
@@ -370,6 +378,7 @@ class Cheatcodes:
     def from_json_file(file_path: str) -> "Cheatcodes":
         with open(file_path, "r") as f:
             return Cheatcodes.from_dict(json.load(f))
+        return None
 
 
 class Item(PyEnum):

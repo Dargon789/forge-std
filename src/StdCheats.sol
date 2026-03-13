@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-pragma solidity >=0.6.2 <0.9.0;
-
-pragma experimental ABIEncoderV2;
+pragma solidity >=0.8.13 <0.9.0;
 
 import {StdStorage, stdStorage} from "./StdStorage.sol";
 import {console2} from "./console2.sol";
@@ -16,7 +14,7 @@ abstract contract StdCheatsSafe {
     bool private gasMeteringOff;
 
     // Data structures to parse Transaction objects from the broadcast artifact
-    // that conform to EIP1559. The Raw structs is what is parsed from the JSON
+    // that conform to EIP1559. The Raw structs are what are parsed from the JSON
     // and then converted to the one that is used by the user for better UX.
 
     struct RawTx1559 {
@@ -65,7 +63,7 @@ abstract contract StdCheatsSafe {
     }
 
     // Data structures to parse Transaction objects from the broadcast artifact
-    // that DO NOT conform to EIP1559. The Raw structs is what is parsed from the JSON
+    // that DO NOT conform to EIP1559. The Raw structs are what are parsed from the JSON
     // and then converted to the one that is used by the user for better UX.
 
     struct TxLegacy {
@@ -392,6 +390,7 @@ abstract contract StdCheatsSafe {
     function rawToConvertedEIPTx1559(RawTx1559 memory rawTx) internal pure virtual returns (Tx1559 memory) {
         Tx1559 memory transaction;
         transaction.arguments = rawTx.arguments;
+        transaction.contractAddress = rawTx.contractAddress;
         transaction.contractName = rawTx.contractName;
         transaction.functionSig = rawTx.functionSig;
         transaction.hash = rawTx.hash;
@@ -501,8 +500,7 @@ abstract contract StdCheatsSafe {
     // e.g. `deployCode(code, abi.encode(arg1,arg2,arg3))`
     function deployCode(string memory what, bytes memory args) internal virtual returns (address addr) {
         bytes memory bytecode = abi.encodePacked(vm.getCode(what), args);
-        /// @solidity memory-safe-assembly
-        assembly {
+        assembly ("memory-safe") {
             addr := create(0, add(bytecode, 0x20), mload(bytecode))
         }
 
@@ -511,8 +509,7 @@ abstract contract StdCheatsSafe {
 
     function deployCode(string memory what) internal virtual returns (address addr) {
         bytes memory bytecode = vm.getCode(what);
-        /// @solidity memory-safe-assembly
-        assembly {
+        assembly ("memory-safe") {
             addr := create(0, add(bytecode, 0x20), mload(bytecode))
         }
 
@@ -522,8 +519,7 @@ abstract contract StdCheatsSafe {
     /// @dev deploy contract with value on construction
     function deployCode(string memory what, bytes memory args, uint256 val) internal virtual returns (address addr) {
         bytes memory bytecode = abi.encodePacked(vm.getCode(what), args);
-        /// @solidity memory-safe-assembly
-        assembly {
+        assembly ("memory-safe") {
             addr := create(val, add(bytecode, 0x20), mload(bytecode))
         }
 
@@ -532,8 +528,7 @@ abstract contract StdCheatsSafe {
 
     function deployCode(string memory what, uint256 val) internal virtual returns (address addr) {
         bytes memory bytecode = vm.getCode(what);
-        /// @solidity memory-safe-assembly
-        assembly {
+        assembly ("memory-safe") {
             addr := create(val, add(bytecode, 0x20), mload(bytecode))
         }
 
@@ -772,7 +767,7 @@ abstract contract StdCheats is StdCheatsSafe {
             (, bytes memory totSupData) = token.staticcall(abi.encodeWithSelector(0xbd85b039, id));
             require(
                 totSupData.length != 0,
-                "StdCheats deal(address,address,uint,uint,bool): target contract is not ERC1155Supply."
+                "StdCheats dealERC1155(address,address,uint256,uint256,bool): target contract is not ERC1155Supply."
             );
             uint256 totSup = abi.decode(totSupData, (uint256));
             if (give < prevBal) {
@@ -787,7 +782,7 @@ abstract contract StdCheats is StdCheatsSafe {
     function dealERC721(address token, address to, uint256 id) internal virtual {
         // check if token id is already minted and the actual owner.
         (bool successMinted, bytes memory ownerData) = token.staticcall(abi.encodeWithSelector(0x6352211e, id));
-        require(successMinted, "StdCheats deal(address,address,uint,bool): id not minted.");
+        require(successMinted, "StdCheats dealERC721(address,address,uint256): id not minted.");
 
         // get owner current balance
         (, bytes memory fromBalData) =

@@ -167,7 +167,7 @@ contract Storage {
 
 ### stdCheats
 
-This is a wrapper around miscellaneous cheatcodes that need wrappers to be more dev-friendly. Currently there are only functions related to `prank`. In general, users may expect ETH to be put into an address with `prank`, but this is not the case for safety reasons. Explicitly, this `hoax` function should only be used for addresses that have expected balances as it will get overwritten. If an address already has ETH, you should just use `prank`. If you want to change that balance explicitly, just use `deal`. If you want to do both, `hoax` is also right for you.
+This is a wrapper around miscellaneous cheatcodes that need wrappers to be more dev-friendly. It includes functions for pranking, dealing with ETH and tokens, deploying contracts, creating test addresses, time manipulation, and fuzzing helpers. In general, users may expect ETH to be put into an address with `prank`, but this is not the case for safety reasons. Explicitly, this `hoax` function should only be used for addresses that have expected balances as it will get overwritten. If an address already has ETH, you should just use `prank`. If you want to change that balance explicitly, just use `deal`. If you want to do both, `hoax` is also right for you.
 
 #### Example usage:
 
@@ -220,6 +220,52 @@ contract Bar {
 ### Std Assertions
 
 Provides comprehensive assertion functions for testing, including equality checks (assertEq, assertNotEq), comparisons (assertLt, assertGt, assertLe, assertGe), approximate equality (assertApproxEqAbs, assertApproxEqRel), and boolean assertions (assertTrue, assertFalse). All assertions support multiple data types and optional custom error messages.
+
+### StdConfig
+
+This is a contract that parses a TOML configuration file and loads its variables into storage, automatically casting them on deployment. It assumes a TOML structure where top-level keys represent chain IDs or aliases. Under each chain key, variables are organized by type in separate sub-tables like `[<chain>.<type>]`, where type must be: `bool`, `address`, `bytes32`, `uint`, `int`, `string`, or `bytes`.
+
+#### Example usage
+
+```solidity
+
+// SPDX-License-Identifier: MIT OR Apache-2.0
+pragma solidity ^0.8.13;
+
+import "forge-std/Script.sol";
+import "forge-std/StdConfig.sol";
+
+contract MyScript is Script {
+    StdConfig config;
+
+    function run() public {
+        // Load config (set writeToFile=true only in scripts to persist changes)
+        config = new StdConfig("config.toml", false);
+
+        // Get values for the current chain
+        uint256 myNumber = config.get("important_number").toUint256();
+        address weth = config.get("weth").toAddress();
+        address[] memory admins = config.get("whitelisted_admins").toAddressArray();
+
+        // Get values for a specific chain
+        bool isLive = config.get(1, "is_live").toBool();
+
+        // Check if a key exists
+        if (config.exists("optional_param")) {
+            // ...
+        }
+
+        // Get RPC URL for current or specific chain
+        string memory rpc = config.getRpcUrl();
+        string memory mainnetRpc = config.getRpcUrl(1);
+
+        // Get all configured chain IDs
+        uint256[] memory chainIds = config.getChainIds();
+    }
+}
+```
+
+See the contract itself for supported TOML format and all available methods.
 
 ### `console.log`
 

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-pragma solidity >=0.6.2 <0.9.0;
-pragma experimental ABIEncoderV2;
+pragma solidity >=0.8.13 <0.9.0;
 
 import {VmSafe} from "./Vm.sol";
 
@@ -8,7 +7,7 @@ import {VmSafe} from "./Vm.sol";
  * StdChains provides information about EVM compatible chains that can be used in scripts/tests.
  * For each chain, the chain's name, chain ID, and a default RPC URL are provided. Chains are
  * identified by their alias, which is the same as the alias in the `[rpc_endpoints]` section of
- * the `foundry.toml` file. For best UX, ensure the alias in the `foundry.toml` file match the
+ * the `foundry.toml` file. For best UX, ensure the alias in the `foundry.toml` file matches the
  * alias used in this contract, which can be found as the first argument to the
  * `setChainWithDefaultRpcUrl` call in the `initializeStdChains` function.
  *
@@ -59,20 +58,14 @@ abstract contract StdChains {
 
     // Maps from the chain's alias (matching the alias in the `foundry.toml` file) to chain data.
     mapping(string => Chain) private chains;
-    // Maps from the chain's alias to it's default RPC URL.
+    // Maps from the chain's alias to its default RPC URL.
     mapping(string => string) private defaultRpcUrls;
-    // Maps from a chain ID to it's alias.
+    // Maps from a chain ID to its alias.
     mapping(uint256 => string) private idToAlias;
 
     bool private fallbackToDefaultRpcUrls = true;
 
-    /// @dev Retrieves chain configuration by alias. RPC URL is resolved using the prioritization
-    ///      hierarchy: setChain > foundry.toml > environment variable > defaults.
-    ///      Triggers lazy initialization of default chains on first call.
-    /// @param chainAlias The chain alias (e.g., "mainnet", "sepolia"). Must match the alias in
-    ///                   foundry.toml [rpc_endpoints] section for config-based resolution.
-    /// @return chain The chain configuration with resolved RPC URL.
-    /// @custom:reverts If chainAlias is empty or chain not found in the registry.
+    // The RPC URL will be fetched from config or defaultRpcUrls if possible.
     function getChain(string memory chainAlias) internal virtual returns (Chain memory chain) {
         require(bytes(chainAlias).length != 0, "StdChains getChain(string): Chain alias cannot be the empty string.");
 
@@ -86,12 +79,6 @@ abstract contract StdChains {
         chain = getChainWithUpdatedRpcUrl(chainAlias, chain);
     }
 
-    /// @dev Retrieves chain configuration by chain ID. First resolves chainId to its alias via
-    ///      the internal mapping, then delegates to getChain(string). RPC URL resolution follows
-    ///      the same prioritization hierarchy: setChain > foundry.toml > env var > defaults.
-    /// @param chainId The chain ID (e.g., 1 for mainnet, 11155111 for sepolia).
-    /// @return chain The chain configuration with resolved RPC URL.
-    /// @custom:reverts If chainId is 0 or chain not found in the registry.
     function getChain(uint256 chainId) internal virtual returns (Chain memory chain) {
         require(chainId != 0, "StdChains getChain(uint256): Chain ID cannot be 0.");
         initializeStdChains();
@@ -107,13 +94,7 @@ abstract contract StdChains {
         chain = getChainWithUpdatedRpcUrl(chainAlias, chain);
     }
 
-    /// @dev Sets custom chain configuration for the given alias. If chain.rpcUrl is provided, it takes
-    ///      priority in subsequent getChain calls. Creates bidirectional mappings (alias <-> chainId).
-    ///      Overwrites existing configuration if the alias already exists.
-    /// @param chainAlias The chain alias to register (must be non-empty).
-    /// @param chain The chain data including name, chainId, and optional rpcUrl.
-    /// @custom:reverts If chainAlias is empty, chainId is 0, or chainId is already mapped to a different alias.
-    /// @custom:sideeffects Updates chains[chainAlias] and idToAlias[chainId] mappings. Removes old chainId mapping if alias is being updated.
+    // set chain info, with priority to argument's rpcUrl field.
     function setChain(string memory chainAlias, ChainData memory chain) internal virtual {
         require(
             bytes(chainAlias).length != 0,
@@ -146,12 +127,7 @@ abstract contract StdChains {
         idToAlias[chain.chainId] = chainAlias;
     }
 
-    /// @dev Convenience overload that accepts a Chain struct instead of ChainData. Extracts the
-    ///      relevant fields and delegates to setChain(string, ChainData). Behavior is identical
-    ///      regarding RPC URL priority and mapping updates.
-    /// @param chainAlias The chain alias to register (must be non-empty).
-    /// @param chain The Chain struct including name, chainId, chainAlias, and optional rpcUrl.
-    /// @custom:reverts Same conditions as setChain(string, ChainData).
+    // set chain info, with priority to argument's rpcUrl field.
     function setChain(string memory chainAlias, Chain memory chain) internal virtual {
         setChain(chainAlias, ChainData({name: chain.name, chainId: chain.chainId, rpcUrl: chain.rpcUrl}));
     }
@@ -170,12 +146,8 @@ abstract contract StdChains {
         return string(copy);
     }
 
-    /// @dev Internal helper that resolves the RPC URL for a chain using the prioritization hierarchy.
-    ///      Priority order: current chain.rpcUrl > foundry.toml config > environment variable > default.
-    ///      Environment variable format: {UPPERCASE_ALIAS}_RPC_URL (e.g., MAINNET_RPC_URL).
-    /// @param chainAlias The chain alias used for config and env var lookups.
-    /// @param chain The chain struct, potentially with an empty rpcUrl to be resolved.
-    /// @return The chain struct with rpcUrl populated from the highest priority available source.
+    // lookup rpcUrl, in descending order of priority:
+    // current -> config (foundry.toml) -> environment variable -> default
     function getChainWithUpdatedRpcUrl(string memory chainAlias, Chain memory chain)
         private
         view
@@ -203,8 +175,7 @@ abstract contract StdChains {
                     (errHash != keccak256(oldNotFoundError) && errHash != keccak256(newNotFoundError))
                         || bytes(chain.rpcUrl).length == 0
                 ) {
-                    /// @solidity memory-safe-assembly
-                    assembly {
+                    assembly ("memory-safe") {
                         revert(add(32, err), mload(err))
                     }
                 }
@@ -213,18 +184,10 @@ abstract contract StdChains {
         return chain;
     }
 
-    /// @dev Configures whether to fall back to default RPC URLs when foundry.toml config is unavailable.
-    ///      When set to false, getChain will revert if the environment variable is not set and no
-    ///      config exists. Default value is true.
-    /// @param useDefault If true, falls back to default RPC URLs; if false, requires explicit config or env var.
     function setFallbackToDefaultRpcUrls(bool useDefault) internal {
         fallbackToDefaultRpcUrls = useDefault;
     }
 
-    /// @dev Lazy initialization function that populates the default chain registry on first use.
-    ///      Called automatically by getChain and setChain. Uses a guard flag to ensure initialization
-    ///      happens exactly once per contract instance.
-    /// @custom:chains Initializes 50+ chains including mainnet, testnets, and L2s with default RPC URLs.
     function initializeStdChains() private {
         if (stdChainsInitialized) return;
 
@@ -319,13 +282,17 @@ abstract contract StdChains {
         setChainWithDefaultRpcUrl(
             "unichain_sepolia", ChainData("Unichain Sepolia", 1301, "https://sepolia.unichain.org")
         );
+
+        setChainWithDefaultRpcUrl("tempo", ChainData("Tempo", 4217, "https://rpc.mainnet.tempo.xyz"));
+        setChainWithDefaultRpcUrl(
+            "tempo_moderato", ChainData("Tempo Moderato", 42431, "https://rpc.moderato.tempo.xyz")
+        );
+        setChainWithDefaultRpcUrl(
+            "tempo_andantino", ChainData("Tempo Andantino", 42429, "https://rpc.testnet.tempo.xyz")
+        );
     }
 
-    /// @dev Internal helper used during initialization to register chains with default RPC URLs.
-    ///      Stores the default URL separately and clears chain.rpcUrl to enable config-based resolution.
-    ///      This ensures foundry.toml and env vars take priority over defaults.
-    /// @param chainAlias The chain alias to register.
-    /// @param chain The chain data with a default RPC URL.
+    // set chain info, with priority to chainAlias' rpc url in foundry.toml
     function setChainWithDefaultRpcUrl(string memory chainAlias, ChainData memory chain) private {
         string memory rpcUrl = chain.rpcUrl;
         defaultRpcUrls[chainAlias] = rpcUrl;
