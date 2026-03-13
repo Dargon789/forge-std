@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-pragma solidity >=0.8.13 <0.9.0;
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.6.2 <0.9.0;
 
 import {Vm} from "./Vm.sol";
 
@@ -123,8 +123,7 @@ library stdStorageSafe {
         if (reads.length == 0) {
             revert("stdStorage find(StdStorage): No storage use detected for target.");
         } else {
-            for (uint256 i = reads.length; i > 0;) {
-                --i;
+            for (uint256 i = reads.length; --i >= 0;) {
                 bytes32 prev = vm.load(who, reads[i]);
                 if (prev == bytes32(0)) {
                     emit WARNING_UninitedSlot(who, uint256(reads[i]));
@@ -253,7 +252,7 @@ library stdStorageSafe {
         (bool found, bytes32 key, bytes32 parent_slot) = vm.getMappingKeyAndParentOf(who, bytes32(child));
         if (!found) {
             revert(
-                "stdStorage parent(StdStorage): Cannot find parent. Make sure you give a slot and startMappingRecording() has been called."
+                "stdStorage read_bool(StdStorage): Cannot find parent. Make sure you give a slot and startMappingRecording() has been called."
             );
         }
         return (uint256(parent_slot), key);
@@ -270,7 +269,7 @@ library stdStorageSafe {
         (found,, parent_slot) = vm.getMappingKeyAndParentOf(who, bytes32(child));
         if (!found) {
             revert(
-                "stdStorage root(StdStorage): Cannot find parent. Make sure you give a slot and startMappingRecording() has been called."
+                "stdStorage read_bool(StdStorage): Cannot find parent. Make sure you give a slot and startMappingRecording() has been called."
             );
         }
         while (found) {
@@ -283,11 +282,7 @@ library stdStorageSafe {
     function bytesToBytes32(bytes memory b, uint256 offset) private pure returns (bytes32) {
         bytes32 out;
 
-        // Cap read length by remaining bytes from `offset`, and at most 32 bytes to avoid out-of-bounds
-        uint256 max = b.length > offset ? b.length - offset : 0;
-        if (max > 32) {
-            max = 32;
-        }
+        uint256 max = b.length > 32 ? 32 : b.length;
         for (uint256 i = 0; i < max; i++) {
             out |= bytes32(b[offset + i] & 0xFF) >> (i * 8);
         }
@@ -298,7 +293,8 @@ library stdStorageSafe {
         bytes memory result = new bytes(b.length * 32);
         for (uint256 i = 0; i < b.length; i++) {
             bytes32 k = b[i];
-            assembly ("memory-safe") {
+            /// @solidity memory-safe-assembly
+            assembly {
                 mstore(add(result, add(32, mul(32, i))), k)
             }
         }
@@ -404,7 +400,8 @@ library stdStorage {
 
     function checked_write(StdStorage storage self, bool write) internal {
         bytes32 t;
-        assembly ("memory-safe") {
+        /// @solidity memory-safe-assembly
+        assembly {
             t := write
         }
         checked_write(self, t);
@@ -426,7 +423,7 @@ library stdStorage {
                 uint256(set) < maxVal,
                 string(
                     abi.encodePacked(
-                        "stdStorage checked_write(StdStorage): Packed slot. We can't fit value greater than ",
+                        "stdStorage find(StdStorage): Packed slot. We can't fit value greater than ",
                         vm.toString(maxVal)
                     )
                 )
@@ -441,7 +438,7 @@ library stdStorage {
 
         if (!success || callResult != set) {
             vm.store(who, bytes32(data.slot), curVal);
-            revert("stdStorage checked_write(StdStorage): Failed to write value.");
+            revert("stdStorage find(StdStorage): Failed to write value.");
         }
         clear(self);
     }
