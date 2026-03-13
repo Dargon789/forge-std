@@ -1,26 +1,26 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-pragma solidity >=0.8.13 <0.9.0;
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.7.0 <0.9.0;
 
 import {Test, StdUtils} from "../src/Test.sol";
 
 contract StdUtilsMock is StdUtils {
     // We deploy a mock version so we can properly test expected reverts.
-    function exposedGetTokenBalances(address token, address[] memory addresses)
+    function exposed_getTokenBalances(address token, address[] memory addresses)
         external
         returns (uint256[] memory balances)
     {
         return getTokenBalances(token, addresses);
     }
 
-    function exposedBound(int256 num, int256 min, int256 max) external pure returns (int256) {
+    function exposed_bound(int256 num, int256 min, int256 max) external pure returns (int256) {
         return bound(num, min, max);
     }
 
-    function exposedBound(uint256 num, uint256 min, uint256 max) external pure returns (uint256) {
+    function exposed_bound(uint256 num, uint256 min, uint256 max) external pure returns (uint256) {
         return bound(num, min, max);
     }
 
-    function exposedBytesToUint(bytes memory b) external pure returns (uint256) {
+    function exposed_bytesToUint(bytes memory b) external pure returns (uint256) {
         return bytesToUint(b);
     }
 }
@@ -94,7 +94,7 @@ contract StdUtilsTest is Test {
         StdUtilsMock stdUtils = new StdUtilsMock();
 
         vm.expectRevert(bytes("StdUtils bound(uint256,uint256,uint256): Max is less than min."));
-        stdUtils.exposedBound(uint256(5), 100, 10);
+        stdUtils.exposed_bound(uint256(5), 100, 10);
     }
 
     function testFuzz_RevertIf_BoundMaxLessThanMin(uint256 num, uint256 min, uint256 max) public {
@@ -103,7 +103,7 @@ contract StdUtilsTest is Test {
 
         vm.assume(min > max);
         vm.expectRevert(bytes("StdUtils bound(uint256,uint256,uint256): Max is less than min."));
-        stdUtils.exposedBound(num, min, max);
+        stdUtils.exposed_bound(num, min, max);
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -188,7 +188,7 @@ contract StdUtilsTest is Test {
         StdUtilsMock stdUtils = new StdUtilsMock();
 
         vm.expectRevert(bytes("StdUtils bound(int256,int256,int256): Max is less than min."));
-        stdUtils.exposedBound(-5, 100, 10);
+        stdUtils.exposed_bound(-5, 100, 10);
     }
 
     function testFuzz_RevertIf_BoundIntMaxLessThanMin(int256 num, int256 min, int256 max) public {
@@ -197,7 +197,7 @@ contract StdUtilsTest is Test {
 
         vm.assume(min > max);
         vm.expectRevert(bytes("StdUtils bound(int256,int256,int256): Max is less than min."));
-        stdUtils.exposedBound(num, min, max);
+        stdUtils.exposed_bound(num, min, max);
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -235,7 +235,7 @@ contract StdUtilsTest is Test {
 
         bytes memory thirty3Bytes = hex"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
         vm.expectRevert("StdUtils bytesToUint(bytes): Bytes length exceeds 32.");
-        stdUtils.exposedBytesToUint(thirty3Bytes);
+        stdUtils.exposed_bytesToUint(thirty3Bytes);
     }
 
     /*//////////////////////////////////////////////////////////////////////////
@@ -300,7 +300,7 @@ contract StdUtilsForkTest is Test {
         addresses[0] = USDC_HOLDER_0;
 
         vm.expectRevert("Multicall3: call failed");
-        stdUtils.exposedGetTokenBalances(token, addresses);
+        stdUtils.exposed_getTokenBalances(token, addresses);
     }
 
     function test_RevertIf_CannotGetTokenBalances_EOA() external {
@@ -311,7 +311,7 @@ contract StdUtilsForkTest is Test {
         address[] memory addresses = new address[](1);
         addresses[0] = USDC_HOLDER_0;
         vm.expectRevert("StdUtils getTokenBalances(address,address[]): Token address is not a contract.");
-        stdUtils.exposedGetTokenBalances(eoa, addresses);
+        stdUtils.exposed_getTokenBalances(eoa, addresses);
     }
 
     function test_GetTokenBalances_Empty() external {
