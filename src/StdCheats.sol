@@ -14,7 +14,7 @@ abstract contract StdCheatsSafe {
     bool private gasMeteringOff;
 
     // Data structures to parse Transaction objects from the broadcast artifact
-    // that conform to EIP1559. The Raw structs is what is parsed from the JSON
+    // that conform to EIP1559. The Raw structs are what are parsed from the JSON
     // and then converted to the one that is used by the user for better UX.
 
     struct RawTx1559 {
@@ -63,7 +63,7 @@ abstract contract StdCheatsSafe {
     }
 
     // Data structures to parse Transaction objects from the broadcast artifact
-    // that DO NOT conform to EIP1559. The Raw structs is what is parsed from the JSON
+    // that DO NOT conform to EIP1559. The Raw structs are what are parsed from the JSON
     // and then converted to the one that is used by the user for better UX.
 
     struct TxLegacy {
@@ -767,7 +767,7 @@ abstract contract StdCheats is StdCheatsSafe {
             (, bytes memory totSupData) = token.staticcall(abi.encodeWithSelector(0xbd85b039, id));
             require(
                 totSupData.length != 0,
-                "StdCheats deal(address,address,uint,uint,bool): target contract is not ERC1155Supply."
+                "StdCheats dealERC1155(address,address,uint256,uint256,bool): target contract is not ERC1155Supply."
             );
             uint256 totSup = abi.decode(totSupData, (uint256));
             if (give < prevBal) {
@@ -782,7 +782,7 @@ abstract contract StdCheats is StdCheatsSafe {
     function dealERC721(address token, address to, uint256 id) internal virtual {
         // check if token id is already minted and the actual owner.
         (bool successMinted, bytes memory ownerData) = token.staticcall(abi.encodeWithSelector(0x6352211e, id));
-        require(successMinted, "StdCheats deal(address,address,uint,bool): id not minted.");
+        require(successMinted, "StdCheats dealERC721(address,address,uint256): id not minted.");
 
         // get owner current balance
         (, bytes memory fromBalData) =

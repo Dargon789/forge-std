@@ -7,7 +7,7 @@ import {VmSafe} from "./Vm.sol";
  * StdChains provides information about EVM compatible chains that can be used in scripts/tests.
  * For each chain, the chain's name, chain ID, and a default RPC URL are provided. Chains are
  * identified by their alias, which is the same as the alias in the `[rpc_endpoints]` section of
- * the `foundry.toml` file. For best UX, ensure the alias in the `foundry.toml` file match the
+ * the `foundry.toml` file. For best UX, ensure the alias in the `foundry.toml` file matches the
  * alias used in this contract, which can be found as the first argument to the
  * `setChainWithDefaultRpcUrl` call in the `initializeStdChains` function.
  *
@@ -58,9 +58,9 @@ abstract contract StdChains {
 
     // Maps from the chain's alias (matching the alias in the `foundry.toml` file) to chain data.
     mapping(string => Chain) private chains;
-    // Maps from the chain's alias to it's default RPC URL.
+    // Maps from the chain's alias to its default RPC URL.
     mapping(string => string) private defaultRpcUrls;
-    // Maps from a chain ID to it's alias.
+    // Maps from a chain ID to its alias.
     mapping(uint256 => string) private idToAlias;
 
     bool private fallbackToDefaultRpcUrls = true;
@@ -281,6 +281,14 @@ abstract contract StdChains {
         setChainWithDefaultRpcUrl("unichain", ChainData("Unichain", 130, "https://mainnet.unichain.org"));
         setChainWithDefaultRpcUrl(
             "unichain_sepolia", ChainData("Unichain Sepolia", 1301, "https://sepolia.unichain.org")
+        );
+
+        setChainWithDefaultRpcUrl("tempo", ChainData("Tempo", 4217, "https://rpc.mainnet.tempo.xyz"));
+        setChainWithDefaultRpcUrl(
+            "tempo_moderato", ChainData("Tempo Moderato", 42431, "https://rpc.moderato.tempo.xyz")
+        );
+        setChainWithDefaultRpcUrl(
+            "tempo_andantino", ChainData("Tempo Andantino", 42429, "https://rpc.testnet.tempo.xyz")
         );
     }
 
