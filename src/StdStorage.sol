@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity >=0.6.2 <0.9.0;
 
 import {Vm} from "./Vm.sol";
@@ -42,8 +42,8 @@ library stdStorageSafe {
 
     // Calls target contract with configured parameters
     function callTarget(StdStorage storage self) internal view returns (bool, bytes32) {
-        bytes memory cald = abi.encodePacked(self._sig, getCallParams(self));
-        (bool success, bytes memory rdat) = self._target.staticcall(cald);
+        bytes memory cd = abi.encodePacked(self._sig, getCallParams(self));
+        (bool success, bytes memory rdat) = self._target.staticcall(cd);
         bytes32 result = bytesToBytes32(rdat, 32 * self._depth);
 
         return (success, result);
@@ -252,7 +252,7 @@ library stdStorageSafe {
         (bool found, bytes32 key, bytes32 parent_slot) = vm.getMappingKeyAndParentOf(who, bytes32(child));
         if (!found) {
             revert(
-                "stdStorage read_bool(StdStorage): Cannot find parent. Make sure you give a slot and startMappingRecording() has been called."
+                "stdStorage parent(StdStorage): Cannot find parent. Make sure you give a slot and startMappingRecording() has been called."
             );
         }
         return (uint256(parent_slot), key);
@@ -269,7 +269,7 @@ library stdStorageSafe {
         (found,, parent_slot) = vm.getMappingKeyAndParentOf(who, bytes32(child));
         if (!found) {
             revert(
-                "stdStorage read_bool(StdStorage): Cannot find parent. Make sure you give a slot and startMappingRecording() has been called."
+                "stdStorage root(StdStorage): Cannot find parent. Make sure you give a slot and startMappingRecording() has been called."
             );
         }
         while (found) {

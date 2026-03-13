@@ -48,6 +48,7 @@ enum TypeKind {
 ///                 // string memory notANumber = config.get("important_number").toString();
 ///
 ///                 // Retrieve a address array from the config.
+///                 string[] memory admins = config.get("whitelisted_admins").toAddressArray();
 ///          }
 ///      }
 ///      ```

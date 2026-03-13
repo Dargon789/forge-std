@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity >=0.6.2 <0.9.0;
 
 pragma experimental ABIEncoderV2;
@@ -57,7 +57,6 @@ abstract contract StdUtils {
 
     function bound(uint256 x, uint256 min, uint256 max) internal pure virtual returns (uint256 result) {
         result = _bound(x, min, max);
-        console2_log_StdUtils("Bound result", result);
     }
 
     function _bound(int256 x, int256 min, int256 max) internal pure virtual returns (int256 result) {
@@ -82,7 +81,6 @@ abstract contract StdUtils {
 
     function bound(int256 x, int256 min, int256 max) internal pure virtual returns (int256 result) {
         result = _bound(x, min, max);
-        console2_log_StdUtils("Bound result", vm.toString(result));
     }
 
     function boundPrivateKey(uint256 privateKey) internal pure virtual returns (uint256 result) {
@@ -95,7 +93,6 @@ abstract contract StdUtils {
     }
 
     /// @dev Compute the address a contract will be deployed at for a given deployer address and nonce
-    /// @notice adapted from Solmate implementation (https://github.com/Rari-Capital/solmate/blob/main/src/utils/LibRLP.sol)
     function computeCreateAddress(address deployer, uint256 nonce) internal pure virtual returns (address) {
         console2_log_StdUtils("computeCreateAddress is deprecated. Please use vm.computeCreateAddress instead.");
         return vm.computeCreateAddress(deployer, nonce);
