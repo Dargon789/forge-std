@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.7.0 <0.9.0;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+pragma solidity >=0.8.13 <0.9.0;
 
 import {StdCheats} from "../src/StdCheats.sol";
 import {Test} from "../src/Test.sol";
@@ -211,8 +211,7 @@ contract StdCheatsTest is Test {
     }
 
     function getCode(address who) internal view returns (bytes memory o_code) {
-        /// @solidity memory-safe-assembly
-        assembly {
+        assembly ("memory-safe") {
             // retrieve the size of the code, this needs assembly
             let size := extcodesize(who)
             // allocate output byte array - this could also be done without assembly
@@ -352,24 +351,24 @@ contract StdCheatsTest is Test {
 
         // VM address
         vm.expectRevert();
-        stdCheatsMock.exposed_assumePayable(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+        stdCheatsMock.exposedAssumePayable(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
         // Console address
         vm.expectRevert();
-        stdCheatsMock.exposed_assumePayable(0x000000000000000000636F6e736F6c652e6c6f67);
+        stdCheatsMock.exposedAssumePayable(0x000000000000000000636F6e736F6c652e6c6f67);
 
         // Create2Deployer
         vm.expectRevert();
-        stdCheatsMock.exposed_assumePayable(0x4e59b44847b379578588920cA78FbF26c0B4956C);
+        stdCheatsMock.exposedAssumePayable(0x4e59b44847b379578588920cA78FbF26c0B4956C);
 
         // all should pass since these addresses are payable
 
         // vitalik.eth
-        stdCheatsMock.exposed_assumePayable(0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045);
+        stdCheatsMock.exposedAssumePayable(0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045);
 
         // mock payable contract
         MockContractPayable cp = new MockContractPayable();
-        stdCheatsMock.exposed_assumePayable(address(cp));
+        stdCheatsMock.exposedAssumePayable(address(cp));
     }
 
     function test_AssumeNotPayable() external {
@@ -379,24 +378,24 @@ contract StdCheatsTest is Test {
         // all should pass since these addresses are not payable
 
         // VM address
-        stdCheatsMock.exposed_assumeNotPayable(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
+        stdCheatsMock.exposedAssumeNotPayable(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
         // Console address
-        stdCheatsMock.exposed_assumeNotPayable(0x000000000000000000636F6e736F6c652e6c6f67);
+        stdCheatsMock.exposedAssumeNotPayable(0x000000000000000000636F6e736F6c652e6c6f67);
 
         // Create2Deployer
-        stdCheatsMock.exposed_assumeNotPayable(0x4e59b44847b379578588920cA78FbF26c0B4956C);
+        stdCheatsMock.exposedAssumeNotPayable(0x4e59b44847b379578588920cA78FbF26c0B4956C);
 
         // all should revert since these addresses are payable
 
         // vitalik.eth
         vm.expectRevert();
-        stdCheatsMock.exposed_assumeNotPayable(0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045);
+        stdCheatsMock.exposedAssumeNotPayable(0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045);
 
         // mock payable contract
         MockContractPayable cp = new MockContractPayable();
         vm.expectRevert();
-        stdCheatsMock.exposed_assumeNotPayable(address(cp));
+        stdCheatsMock.exposedAssumeNotPayable(address(cp));
     }
 
     function testFuzz_AssumeNotPrecompile(address addr) external {
@@ -444,16 +443,16 @@ contract StdCheatsTest is Test {
 }
 
 contract StdCheatsMock is StdCheats {
-    function exposed_assumePayable(address addr) external {
+    function exposedAssumePayable(address addr) external {
         assumePayable(addr);
     }
 
-    function exposed_assumeNotPayable(address addr) external {
+    function exposedAssumeNotPayable(address addr) external {
         assumeNotPayable(addr);
     }
 
     // We deploy a mock version so we can properly test expected reverts.
-    function exposed_assumeNotBlacklisted(address token, address addr) external view {
+    function exposedAssumeNotBlacklisted(address token, address addr) external view {
         return assumeNotBlacklisted(token, addr);
     }
 }
@@ -478,7 +477,7 @@ contract StdCheatsForkTest is Test {
         StdCheatsMock stdCheatsMock = new StdCheatsMock();
         address eoa = vm.addr({privateKey: 1});
         vm.expectRevert("StdCheats assumeNotBlacklisted(address,address): Token address is not a contract.");
-        stdCheatsMock.exposed_assumeNotBlacklisted(eoa, address(0));
+        stdCheatsMock.exposedAssumeNotBlacklisted(eoa, address(0));
     }
 
     function testFuzz_AssumeNotBlacklisted_TokenWithoutBlacklist(address addr) external view {
@@ -491,7 +490,7 @@ contract StdCheatsForkTest is Test {
         // We deploy a mock version so we can properly test the revert.
         StdCheatsMock stdCheatsMock = new StdCheatsMock();
         vm.expectRevert();
-        stdCheatsMock.exposed_assumeNotBlacklisted(address(USDC), USDC_BLACKLISTED_USER);
+        stdCheatsMock.exposedAssumeNotBlacklisted(address(USDC), USDC_BLACKLISTED_USER);
     }
 
     function testFuzz_AssumeNotBlacklisted_USDC(address addr) external view {
@@ -503,7 +502,7 @@ contract StdCheatsForkTest is Test {
         // We deploy a mock version so we can properly test the revert.
         StdCheatsMock stdCheatsMock = new StdCheatsMock();
         vm.expectRevert();
-        stdCheatsMock.exposed_assumeNotBlacklisted(address(USDT), USDT_BLACKLISTED_USER);
+        stdCheatsMock.exposedAssumeNotBlacklisted(address(USDT), USDT_BLACKLISTED_USER);
     }
 
     function testFuzz_AssumeNotBlacklisted_USDT(address addr) external view {

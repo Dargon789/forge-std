@@ -1,16 +1,16 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity ^0.8.13;
 
 import {VmSafe} from "./Vm.sol";
 import {Variable, Type, TypeKind, LibVariable} from "./LibVariable.sol";
 
-/// @notice  A contract that parses a toml configuration file and load its
+/// @notice  A contract that parses a toml configuration file and loads its
 ///          variables into storage, automatically casting them, on deployment.
 ///
 /// @dev     This contract assumes a toml structure where top-level keys
 ///          represent chain ids or aliases. Under each chain key, variables are
 ///          organized by type in separate sub-tables like `[<chain>.<type>]`, where
-///          type must be: `bool`, `address`, `bytes32`, `uint`, `ìnt`, `string`, or `bytes`.
+///          type must be: `bool`, `address`, `bytes32`, `uint`, `int`, `string`, or `bytes`.
 ///
 ///          Supported format:
 ///          ```
@@ -37,7 +37,7 @@ contract StdConfig {
 
     VmSafe private constant vm = VmSafe(address(uint160(uint256(keccak256("hevm cheat code")))));
 
-    /// @dev Types: `bool`, `address`, `bytes32`, `uint`, `ìnt`, `string`, `bytes`.
+    /// @dev Types: `bool`, `address`, `bytes32`, `uint`, `int`, `string`, `bytes`.
     uint8 private constant NUM_TYPES = 7;
 
     // -- ERRORS ---------------------------------------------------------------
@@ -75,7 +75,7 @@ contract StdConfig {
     /// @notice Reads the TOML file and iterates through each top-level key, which is
     ///         assumed to be a chain name or ID. For each chain, it caches its RPC
     ///         endpoint and all variables defined in typed sub-tables like `[<chain>.<type>]`,
-    ///         where type must be: `bool`, `address`, `uint`, `bytes32`, `string`, or `bytes`.
+    ///         where type must be: `bool`, `address`, `bytes32`, `uint`, `int`, `string`, or `bytes`.
     ///
     ///         The constructor attempts to parse each variable first as a single value,
     ///         and if that fails, as an array of that type. If a variable cannot be
@@ -103,10 +103,11 @@ contract StdConfig {
             uint256 chainId = resolveChainId(chain_key);
             _chainKeys.push(chain_key);
 
-            // Cache the configure rpc endpoint for that chain.
+            // Cache the configured RPC endpoint for that chain.
             // Falls back to `[rpc_endpoints]`. Panics if no rpc endpoint is configured.
-            try vm.parseTomlString(content, string.concat("$.", chain_key, ".endpoint_url")) returns (string memory url)
-            {
+            try vm.parseTomlString(content, string.concat("$.", chain_key, ".endpoint_url")) returns (
+                string memory url
+            ) {
                 _rpcOf[chainId] = vm.resolveEnv(url);
             } catch {
                 _rpcOf[chainId] = vm.resolveEnv(vm.rpcUrl(chain_key));
@@ -126,7 +127,7 @@ contract StdConfig {
                             revert AlreadyInitialized(key);
                         }
                     }
-                } catch {} // Section does not exist, ignore.
+                } catch {}
             }
         }
     }
@@ -318,6 +319,25 @@ contract StdConfig {
     /// @return `Variable` struct containing the type and the ABI-encoded value.
     function get(string memory key) public view returns (Variable memory) {
         return get(vm.getChainId(), key);
+    }
+
+    /// @dev    Checks the existence of a variable for a given chain ID and key, and returns a boolean.
+    ///         Example: `bool hasKey = config.exists(1, "my_key");`
+    ///
+    /// @param chain_id The chain ID to check.
+    /// @param key The variable key name.
+    /// @return `bool` indicating whether a variable with the given key exists.
+    function exists(uint256 chain_id, string memory key) public view returns (bool) {
+        return _dataOf[chain_id][key].length > 0;
+    }
+
+    /// @dev    Checks the existence of a variable for the current chain id and a given key, and returns a boolean.
+    ///         Example: `bool hasKey = config.exists("my_key");`
+    ///
+    /// @param key The variable key name.
+    /// @return `bool` indicating whether a variable with the given key exists.
+    function exists(string memory key) public view returns (bool) {
+        return exists(vm.getChainId(), key);
     }
 
     /// @notice Returns the numerical chain ids for all configured chains.

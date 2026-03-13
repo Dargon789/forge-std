@@ -23,31 +23,19 @@ jobs:
         flags:
           - ""
           - --via-ir
-          - --use solc:0.8.17 --via-ir
-          - --use solc:0.8.17
-          - --use solc:0.8.0
-          - --use solc:0.7.6
-          - --use solc:0.7.0
-          - --use solc:0.6.2
-          - --use solc:0.6.12
+          - --use solc:0.8.33 --via-ir
+          - --use solc:0.8.33
+          - --use solc:0.8.13 --via-ir
+          - --use solc:0.8.13
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: ${{ matrix.toolchain }}
       - run: forge --version
-      - run: |
-          case "${{ matrix.flags }}" in
-            *"solc:0.8.0"* | *"solc:0.7"* | *"solc:0.6"*)
-              forge build --skip test --skip Config --skip StdConfig --skip LibVariable --deny-warnings ${{ matrix.flags }}
-              ;;
-            *)
-              forge build --skip test --deny-warnings ${{ matrix.flags }}
-              ;;
-          esac
-      # via-ir compilation time checks.
-      - if: contains(matrix.flags, '--via-ir')
-        run: forge build --skip test --deny-warnings ${{ matrix.flags }} --contracts 'test/compilation/*'
+      - run: forge build -vvvvv --skip test --deny warnings ${{ matrix.flags }} --contracts 'test/compilation/*'
 
   test:
     runs-on: ubuntu-latest
@@ -59,7 +47,7 @@ jobs:
       matrix:
         toolchain: [stable, nightly]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: foundry-rs/foundry-toolchain@v1
@@ -74,7 +62,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: foundry-rs/foundry-toolchain@v1
@@ -87,10 +75,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: crate-ci/typos@7436548694def3314aacd93ed06c721b1f91ea04 # v1
+      - uses: crate-ci/typos@631208b7aac2daa8b707f55e7331f9112b0e062d # v1
 
   codeql:
     name: Analyze (${{ matrix.language }})
@@ -107,16 +95,16 @@ jobs:
             build-mode: none
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{matrix.language}}"
 
