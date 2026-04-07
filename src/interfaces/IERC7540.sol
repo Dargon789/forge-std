@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.6.2;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+pragma solidity >=0.8.13 <0.9.0;
 
 import {IERC7575} from "./IERC7575.sol";
 
@@ -44,7 +44,7 @@ interface IERC7540Deposit is IERC7540Operator {
      * @dev Transfers assets from sender into the Vault and submits a Request for asynchronous deposit.
      *
      * - MUST support ERC-20 approve / transferFrom on asset as a deposit Request flow.
-     * - MUST revert if all of assets cannot be requested for deposit.
+     * - MUST revert if all assets cannot be requested for deposit.
      * - owner MUST be msg.sender unless some unspecified explicit approval is given by the caller,
      *    approval of ERC-20 tokens from owner to sender is NOT enough.
      *
@@ -64,10 +64,7 @@ interface IERC7540Deposit is IERC7540Operator {
      * - MUST NOT show any variations depending on the caller.
      * - MUST NOT revert unless due to integer overflow caused by an unreasonably large input.
      */
-    function pendingDepositRequest(uint256 requestId, address controller)
-        external
-        view
-        returns (uint256 pendingAssets);
+    function pendingDepositRequest(uint256 requestId, address controller) external view returns (uint256 pendingAssets);
 
     /**
      * @dev Returns the amount of requested assets in Claimable state for the controller to deposit or mint.
@@ -98,7 +95,7 @@ interface IERC7540Deposit is IERC7540Operator {
     function mint(uint256 shares, address receiver, address controller) external returns (uint256 assets);
 }
 
-/// @dev Interface of the asynchronous deposit Vault interface of ERC7540, as defined in
+/// @dev Interface of the asynchronous redeem Vault interface of ERC7540, as defined in
 /// https://eips.ethereum.org/EIPS/eip-7540
 interface IERC7540Redeem is IERC7540Operator {
     event RedeemRequest(
@@ -110,7 +107,7 @@ interface IERC7540Redeem is IERC7540Operator {
      *
      * - MUST support a redeem Request flow where the control of shares is taken from sender directly
      *   where msg.sender has ERC-20 approval over the shares of owner.
-     * - MUST revert if all of shares cannot be requested for redeem.
+     * - MUST revert if all shares cannot be requested for redeem.
      *
      * @param shares the amount of shares to be redeemed to transfer from owner
      * @param controller the controller of the request who will be able to operate the request
@@ -127,10 +124,7 @@ interface IERC7540Redeem is IERC7540Operator {
      * - MUST NOT show any variations depending on the caller.
      * - MUST NOT revert unless due to integer overflow caused by an unreasonably large input.
      */
-    function pendingRedeemRequest(uint256 requestId, address controller)
-        external
-        view
-        returns (uint256 pendingShares);
+    function pendingRedeemRequest(uint256 requestId, address controller) external view returns (uint256 pendingShares);
 
     /**
      * @dev Returns the amount of requested shares in Claimable state for the controller to redeem or withdraw.
