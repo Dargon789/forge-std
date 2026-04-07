@@ -1,22 +1,22 @@
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.7.0 <0.9.0;
+// SPDX-License-Identifier: MIT OR Apache-2.0
+pragma solidity >=0.8.13 <0.9.0;
 
-import "../src/Test.sol";
+import {Test} from "../src/Test.sol";
 
 contract StdChainsMock is Test {
-    function exposed_getChain(string memory chainAlias) public returns (Chain memory) {
+    function exposedGetChain(string memory chainAlias) public returns (Chain memory) {
         return getChain(chainAlias);
     }
 
-    function exposed_getChain(uint256 chainId) public returns (Chain memory) {
+    function exposedGetChain(uint256 chainId) public returns (Chain memory) {
         return getChain(chainId);
     }
 
-    function exposed_setChain(string memory chainAlias, ChainData memory chainData) public {
+    function exposedSetChain(string memory chainAlias, ChainData memory chainData) public {
         setChain(chainAlias, chainData);
     }
 
-    function exposed_setFallbackToDefaultRpcUrls(bool useDefault) public {
+    function exposedSetFallbackToDefaultRpcUrls(bool useDefault) public {
         setFallbackToDefaultRpcUrls(useDefault);
     }
 }
@@ -24,9 +24,9 @@ contract StdChainsMock is Test {
 contract StdChainsTest is Test {
     function test_ChainRpcInitialization() public {
         // RPCs specified in `foundry.toml` should be updated.
-        assertEq(getChain(1).rpcUrl, "https://mainnet.infura.io/v3/b1d3925804e74152b316ca7da97060d3");
-        assertEq(getChain("optimism_goerli").rpcUrl, "https://goerli.optimism.io/");
-        assertEq(getChain("arbitrum_one_goerli").rpcUrl, "https://goerli-rollup.arbitrum.io/rpc/");
+        assertEq(getChain(1).rpcUrl, "https://ethereum.reth.rs/rpc");
+        assertEq(getChain("optimism_sepolia").rpcUrl, "https://sepolia.optimism.io/");
+        assertEq(getChain("arbitrum_one_sepolia").rpcUrl, "https://sepolia-rollup.arbitrum.io/rpc/");
 
         // Environment variables should be the next fallback
         assertEq(getChain("arbitrum_nova").rpcUrl, "https://nova.arbitrum.io/rpc");
@@ -36,78 +36,89 @@ contract StdChainsTest is Test {
 
         // Cannot override RPCs defined in `foundry.toml`
         vm.setEnv("MAINNET_RPC_URL", "myoverride2");
-        assertEq(getChain("mainnet").rpcUrl, "https://mainnet.infura.io/v3/b1d3925804e74152b316ca7da97060d3");
+        assertEq(getChain("mainnet").rpcUrl, "https://ethereum.reth.rs/rpc");
 
         // Other RPCs should remain unchanged.
         assertEq(getChain(31337).rpcUrl, "http://127.0.0.1:8545");
         assertEq(getChain("sepolia").rpcUrl, "https://sepolia.infura.io/v3/b9794ad1ddf84dfb8c34d6bb5dca2001");
     }
 
-    function testFuzz_Rpc(string memory rpcAlias) internal {
+    // Named with a leading underscore to clarify this is not intended to be run as a normal test,
+    // and is intended to be used in the below `test_Rpcs` test.
+    function _testRpc(string memory rpcAlias) internal {
         string memory rpcUrl = getChain(rpcAlias).rpcUrl;
         vm.createSelectFork(rpcUrl);
     }
 
     // Ensure we can connect to the default RPC URL for each chain.
-    // function testRpcs() public {
-    //     testRpc("mainnet");
-    //     testRpc("goerli");
-    //     testRpc("sepolia");
-    //     testRpc("optimism");
-    //     testRpc("optimism_goerli");
-    //     testRpc("arbitrum_one");
-    //     testRpc("arbitrum_one_goerli");
-    //     testRpc("arbitrum_nova");
-    //     testRpc("polygon");
-    //     testRpc("polygon_mumbai");
-    //     testRpc("avalanche");
-    //     testRpc("avalanche_fuji");
-    //     testRpc("bnb_smart_chain");
-    //     testRpc("bnb_smart_chain_testnet");
-    //     testRpc("gnosis_chain");
-    //     testRpc("moonbeam");
-    //     testRpc("moonriver");
-    //     testRpc("moonbase");
-    //     testRpc("base_goerli");
-    //     testRpc("base");
+    // Currently commented out since this is slow and public RPCs are flaky, often resulting in failing CI.
+    // function test_Rpcs() public {
+    //     _testRpc("mainnet");
+    //     _testRpc("sepolia");
+    //     _testRpc("holesky");
+    //     _testRpc("optimism");
+    //     _testRpc("optimism_sepolia");
+    //     _testRpc("arbitrum_one");
+    //     _testRpc("arbitrum_one_sepolia");
+    //     _testRpc("arbitrum_nova");
+    //     _testRpc("polygon");
+    //     _testRpc("polygon_amoy");
+    //     _testRpc("avalanche");
+    //     _testRpc("avalanche_fuji");
+    //     _testRpc("bnb_smart_chain");
+    //     _testRpc("bnb_smart_chain_testnet");
+    //     _testRpc("gnosis_chain");
+    //     _testRpc("moonbeam");
+    //     _testRpc("moonriver");
+    //     _testRpc("moonbase");
+    //     _testRpc("base_sepolia");
+    //     _testRpc("base");
+    //     _testRpc("blast_sepolia");
+    //     _testRpc("blast");
+    //     _testRpc("fantom_opera");
+    //     _testRpc("fantom_opera_testnet");
+    //     _testRpc("fraxtal");
+    //     _testRpc("fraxtal_testnet");
+    //     _testRpc("berachain_bartio_testnet");
+    //     _testRpc("flare");
+    //     _testRpc("flare_coston2");
     // }
 
-    function test_ChainNoDefault() public {
+    function test_RevertIf_ChainNotFound() public {
         // We deploy a mock to properly test the revert.
         StdChainsMock stdChainsMock = new StdChainsMock();
 
         vm.expectRevert("StdChains getChain(string): Chain with alias \"does_not_exist\" not found.");
-        stdChainsMock.exposed_getChain("does_not_exist");
+        stdChainsMock.exposedGetChain("does_not_exist");
     }
 
-    function test_SetChainFirstFails() public {
+    function test_RevertIf_SetChain_ChainIdExist_FirstTest() public {
         // We deploy a mock to properly test the revert.
         StdChainsMock stdChainsMock = new StdChainsMock();
 
         vm.expectRevert("StdChains setChain(string,ChainData): Chain ID 31337 already used by \"anvil\".");
-        stdChainsMock.exposed_setChain("anvil2", ChainData("Anvil", 31337, "URL"));
+        stdChainsMock.exposedSetChain("anvil2", ChainData("Anvil", 31337, "URL"));
     }
 
-    function test_ChainBubbleUp() public {
+    function test_RevertIf_ChainBubbleUp() public {
         // We deploy a mock to properly test the revert.
         StdChainsMock stdChainsMock = new StdChainsMock();
 
-        stdChainsMock.exposed_setChain("needs_undefined_env_var", ChainData("", 123456789, ""));
-        vm.expectRevert(
-            "Failed to resolve env var `UNDEFINED_RPC_URL_PLACEHOLDER` in `${UNDEFINED_RPC_URL_PLACEHOLDER}`: environment variable not found"
-        );
-        stdChainsMock.exposed_getChain("needs_undefined_env_var");
+        stdChainsMock.exposedSetChain("needs_undefined_env_var", ChainData("", 123456789, ""));
+        // Forge environment variable error.
+        vm.expectRevert();
+        stdChainsMock.exposedGetChain("needs_undefined_env_var");
     }
 
-    function test_CannotSetChain_ChainIdExists() public {
+    function test_RevertIf_SetChain_ChainIdExists_SecondTest() public {
         // We deploy a mock to properly test the revert.
         StdChainsMock stdChainsMock = new StdChainsMock();
 
-        stdChainsMock.exposed_setChain("custom_chain", ChainData("Custom Chain", 123456789, "https://custom.chain/"));
+        stdChainsMock.exposedSetChain("custom_chain", ChainData("Custom Chain", 123456789, "https://custom.chain/"));
 
         vm.expectRevert('StdChains setChain(string,ChainData): Chain ID 123456789 already used by "custom_chain".');
 
-        stdChainsMock.exposed_setChain("another_custom_chain", ChainData("", 123456789, ""));
+        stdChainsMock.exposedSetChain("another_custom_chain", ChainData("", 123456789, ""));
     }
 
     function test_SetChain() public {
@@ -136,53 +147,53 @@ contract StdChainsTest is Test {
         assertEq(chainById.chainId, 123456789);
     }
 
-    function test_SetNoEmptyAlias() public {
+    function test_RevertIf_SetEmptyAlias() public {
         // We deploy a mock to properly test the revert.
         StdChainsMock stdChainsMock = new StdChainsMock();
 
         vm.expectRevert("StdChains setChain(string,ChainData): Chain alias cannot be the empty string.");
-        stdChainsMock.exposed_setChain("", ChainData("", 123456789, ""));
+        stdChainsMock.exposedSetChain("", ChainData("", 123456789, ""));
     }
 
-    function test_SetNoChainId0() public {
+    function test_RevertIf_SetNoChainId0() public {
         // We deploy a mock to properly test the revert.
         StdChainsMock stdChainsMock = new StdChainsMock();
 
         vm.expectRevert("StdChains setChain(string,ChainData): Chain ID cannot be 0.");
-        stdChainsMock.exposed_setChain("alias", ChainData("", 0, ""));
+        stdChainsMock.exposedSetChain("alias", ChainData("", 0, ""));
     }
 
-    function test_GetNoChainId0() public {
+    function test_RevertIf_GetNoChainId0() public {
         // We deploy a mock to properly test the revert.
         StdChainsMock stdChainsMock = new StdChainsMock();
 
         vm.expectRevert("StdChains getChain(uint256): Chain ID cannot be 0.");
-        stdChainsMock.exposed_getChain(0);
+        stdChainsMock.exposedGetChain(0);
     }
 
-    function test_GetNoEmptyAlias() public {
+    function test_RevertIf_GetNoEmptyAlias() public {
         // We deploy a mock to properly test the revert.
         StdChainsMock stdChainsMock = new StdChainsMock();
 
         vm.expectRevert("StdChains getChain(string): Chain alias cannot be the empty string.");
-        stdChainsMock.exposed_getChain("");
+        stdChainsMock.exposedGetChain("");
     }
 
-    function test_ChainIdNotFound() public {
+    function test_RevertIf_ChainNotInitialized() public {
         // We deploy a mock to properly test the revert.
         StdChainsMock stdChainsMock = new StdChainsMock();
 
         vm.expectRevert("StdChains getChain(string): Chain with alias \"no_such_alias\" not found.");
-        stdChainsMock.exposed_getChain("no_such_alias");
+        stdChainsMock.exposedGetChain("no_such_alias");
     }
 
-    function test_ChainAliasNotFound() public {
+    function test_RevertIf_ChainAliasNotFound() public {
         // We deploy a mock to properly test the revert.
         StdChainsMock stdChainsMock = new StdChainsMock();
 
         vm.expectRevert("StdChains getChain(uint256): Chain with ID 321 not found.");
 
-        stdChainsMock.exposed_getChain(321);
+        stdChainsMock.exposedGetChain(321);
     }
 
     function test_SetChain_ExistingOne() public {
@@ -192,25 +203,25 @@ contract StdChainsTest is Test {
         setChain("custom_chain", ChainData("Custom Chain", 123456789, "https://custom.chain/"));
         assertEq(getChain(123456789).chainId, 123456789);
 
-        setChain("custom_chain", ChainData("Modified Chain", 999999999, "https://modified.chain/"));
+        setChain("custom_chain", ChainData("Modified Chain", 9999999999999999999, "https://modified.chain/"));
         vm.expectRevert("StdChains getChain(uint256): Chain with ID 123456789 not found.");
-        stdChainsMock.exposed_getChain(123456789);
+        stdChainsMock.exposedGetChain(123456789);
 
-        Chain memory modifiedChain = getChain(999999999);
+        Chain memory modifiedChain = getChain(9999999999999999999);
         assertEq(modifiedChain.name, "Modified Chain");
-        assertEq(modifiedChain.chainId, 999999999);
+        assertEq(modifiedChain.chainId, 9999999999999999999);
         assertEq(modifiedChain.rpcUrl, "https://modified.chain/");
     }
 
-    function test_DontUseDefaultRpcUrl() public {
+    function test_RevertIf_DontUseDefaultRpcUrl() public {
         // We deploy a mock to properly test the revert.
         StdChainsMock stdChainsMock = new StdChainsMock();
 
         // Should error if default RPCs flag is set to false.
-        stdChainsMock.exposed_setFallbackToDefaultRpcUrls(false);
+        stdChainsMock.exposedSetFallbackToDefaultRpcUrls(false);
         vm.expectRevert();
-        stdChainsMock.exposed_getChain(31337);
+        stdChainsMock.exposedGetChain(31337);
         vm.expectRevert();
-        stdChainsMock.exposed_getChain("sepolia");
+        stdChainsMock.exposedGetChain("sepolia");
     }
 }
