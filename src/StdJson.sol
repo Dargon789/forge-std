@@ -5,12 +5,15 @@ pragma experimental ABIEncoderV2;
 
 import {VmSafe} from "./Vm.sol";
 
-// Helpers for parsing and writing JSON files
+// Helpers for parsing and writing JSON files.
+// `key` parameters use the same selector syntax as the `vm.parseJson*` cheatcodes,
+// for example `.a` for a nested field or `$` for the root object.
 // To parse:
 // ```
 // using stdJson for string;
 // string memory json = vm.readFile("<some_path>");
-// json.readUint("<json_path>");
+// uint256 value = json.readUint(".a");
+// bytes memory encoded = json.parseRaw("$");
 // ```
 // To write:
 // ```
@@ -25,10 +28,14 @@ import {VmSafe} from "./Vm.sol";
 library stdJson {
     VmSafe private constant vm = VmSafe(address(uint160(uint256(keccak256("hevm cheat code")))));
 
+    /// @dev Returns whether `key` exists in `json`.
+    /// `key` uses the same selector syntax as `vm.parseJson*`, such as `.a` or `$`.
     function keyExists(string memory json, string memory key) internal view returns (bool) {
         return vm.keyExistsJson(json, key);
     }
 
+    /// @dev ABI-encodes the JSON value selected by `key`.
+    /// `key` uses the same selector syntax as `vm.parseJson*`, such as `.a` or `$`.
     function parseRaw(string memory json, string memory key) internal pure returns (bytes memory) {
         return vm.parseJson(json, key);
     }
