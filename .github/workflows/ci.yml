@@ -21,7 +21,7 @@ jobs:
       matrix:
         toolchain: [stable, nightly]
         flags:
-          - ""
+          - ''
           - --via-ir
           - --use solc:0.8.33 --via-ir
           - --use solc:0.8.33
