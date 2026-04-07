@@ -1,5 +1,7 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-pragma solidity >=0.8.13 <0.9.0;
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.6.0 <0.9.0;
+
+pragma experimental ABIEncoderV2;
 
 import {VmSafe} from "./Vm.sol";
 
@@ -195,7 +197,10 @@ library stdJson {
         return vm.serializeBool(jsonKey, key, value);
     }
 
-    function serialize(string memory jsonKey, string memory key, bool[] memory value) internal returns (string memory) {
+    function serialize(string memory jsonKey, string memory key, bool[] memory value)
+        internal
+        returns (string memory)
+    {
         return vm.serializeBool(jsonKey, key, value);
     }
 
@@ -254,7 +259,10 @@ library stdJson {
         return vm.serializeBytes(jsonKey, key, value);
     }
 
-    function serialize(string memory jsonKey, string memory key, string memory value) internal returns (string memory) {
+    function serialize(string memory jsonKey, string memory key, string memory value)
+        internal
+        returns (string memory)
+    {
         return vm.serializeString(jsonKey, key, value);
     }
 
