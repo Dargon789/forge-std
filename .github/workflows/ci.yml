@@ -58,7 +58,6 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-<<<<<<< HEAD
       matrix:
         toolchain: [stable, nightly]
         flags:
@@ -68,9 +67,7 @@ jobs:
           - --use solc:0.8.33
           - --use solc:0.8.13 --via-ir
           - --use solc:0.8.13
-=======
-      matrix: ${{ fromJSON(needs.build-matrix.outputs.matrix) }}
->>>>>>> dependabot
+      
     steps:
       - uses: actions/checkout@v6
         with:
