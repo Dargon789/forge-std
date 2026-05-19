@@ -46,12 +46,6 @@ contract ErrorsTest {
 
 ### stdStorage
 
-<<<<<<< HEAD
-This is a rather large contract due to all of the overloading to make the UX decent. Primarily, it is a wrapper around the `record` and `accesses` cheatcodes. It can _always_ find and write the storage slot(s) associated with a particular variable without knowing the storage layout. The one _major_ caveat to this is while a slot can be found for packed storage variables, we can't write to that variable safely. If a user tries to write to a packed slot, the execution throws an error, unless it is uninitialized (`bytes32(0)`).
-=======
-This is a rather large contract due to all of the overloading to make the UX decent. Primarily, it is a wrapper around the `record` and `accesses` cheatcodes. It can _always_ find and write the storage slot(s) associated with a particular variable without knowing the storage layout. By default, writing to packed storage variables is not supported and will throw an error. However, you can enable packed slot support by calling `enable_packed_slots()` before using `find()` or `checked_write()`.
->>>>>>> b090968353a209833d4a6f1383230477e96d8438
-
 This works by recording all `SLOAD`s and `SSTORE`s during a function call. If there is a single slot read or written to, it immediately returns the slot. Otherwise, behind the scenes, we iterate through and check each one (assuming the user passed in a `depth` parameter). If the variable is a struct, you can pass in a `depth` parameter which is basically the field depth.
 
 I.e.:
@@ -168,15 +162,6 @@ contract Storage {
     }
 }
 ```
-
-### stdCheats
-
-<<<<<<< HEAD
-This is a wrapper over miscellaneous cheatcodes that need wrappers to be more dev friendly. Currently there are only functions related to `prank`. In general, users may expect ETH to be put into an address on `prank`, but this is not the case for safety reasons. Explicitly this `hoax` function should only be used for addresses that have expected balances as it will get overwritten. If an address already has ETH, you should just use `prank`. If you want to change that balance explicitly, just use `deal`. If you want to do both, `hoax` is also right for you.
-=======
-This is a wrapper around miscellaneous cheatcodes that need wrappers to be more dev-friendly. It includes functions for pranking, dealing with ETH and tokens, deploying contracts, creating test addresses, time manipulation, and fuzzing helpers. In general, users may expect ETH to be put into an address with `prank`, but this is not the case for safety reasons. Explicitly, this `hoax` function should only be used for addresses that have expected balances as it will get overwritten. If an address already has ETH, you should just use `prank`. If you want to change that balance explicitly, just use `deal`. If you want to do both, `hoax` is also right for you.
->>>>>>> b090968353a209833d4a6f1383230477e96d8438
-
 #### Example usage:
 
 ```solidity
