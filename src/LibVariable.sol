@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity ^0.8.13;
 
 // Enable globally.
@@ -48,7 +48,7 @@ enum TypeKind {
 ///                 // string memory notANumber = config.get("important_number").toString();
 ///
 ///                 // Retrieve a address array from the config.
-///                 string[] memory admins = config.get("whitelisted_admins").toAddressArray();
+///                 address[] memory admins = config.get("whitelisted_admins").toAddressArray();
 ///          }
 ///      }
 ///      ```
