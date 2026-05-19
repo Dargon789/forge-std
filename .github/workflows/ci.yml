@@ -1,7 +1,6 @@
 name: CI
 
-permissions:
-  contents: read
+permissions: {}
 
 on:
   workflow_dispatch:
@@ -10,13 +9,60 @@ on:
     branches:
       - master
 
+env:
+  SOLC_MINIMUM: "0.8.13"
+  SOLC_LATEST: "0.8.35"
+  SOLC_PRERELEASE: ""
+
 jobs:
+  build-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - id: generate
+        run: |
+          MINIMUM="${{ env.SOLC_MINIMUM }}"
+          LATEST="${{ env.SOLC_LATEST }}"
+          PRERELEASE="${{ env.SOLC_PRERELEASE }}"
+          matrix='{"include":['
+          for toolchain in stable nightly; do
+            for flags in \
+              "" \
+              "--via-ir" \
+              "--use solc:${LATEST}" \
+              "--use solc:${LATEST} --via-ir" \
+              "--use solc:${MINIMUM}" \
+              "--use solc:${MINIMUM} --via-ir"
+            do
+              matrix+='{"toolchain":"'"$toolchain"'","flags":"'"$flags"'","prerelease":false},'
+            done
+          done
+          # prerelease (nightly only, svm-rs is not up to date on stable)
+          if [ -n "$PRERELEASE" ]; then
+            for flags in \
+              "--use solc:${PRERELEASE}" \
+              "--use solc:${PRERELEASE} --via-ir"
+            do
+              matrix+='{"toolchain":"nightly","flags":"'"$flags"'","prerelease":true},'
+            done
+          fi
+          matrix="${matrix%,}]}"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: build-matrix
     name: build +${{ matrix.toolchain }} ${{ matrix.flags }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
+<<<<<<< HEAD
       matrix:
         toolchain: [stable, nightly]
         flags:
@@ -29,76 +75,101 @@ jobs:
           - --use solc:0.7.0
           - --use solc:0.6.2
           - --use solc:0.6.12
+=======
+      matrix: ${{ fromJSON(needs.build-matrix.outputs.matrix) }}
+>>>>>>> b090968353a209833d4a6f1383230477e96d8438
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: foundry-rs/foundry-toolchain@v1
+      - uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
+        with:
+          version: ${{ matrix.toolchain }}
       - run: forge --version
-      - run: |
-          case "${{ matrix.flags }}" in
-            *"solc:0.8.0"* | *"solc:0.7"* | *"solc:0.6"*)
-              forge build --skip test --skip Config --skip StdConfig --skip LibVariable --deny-warnings ${{ matrix.flags }}
-              ;;
-            *)
-              forge build --skip test --deny-warnings ${{ matrix.flags }}
-              ;;
-          esac
-      # via-ir compilation time checks.
-      - if: contains(matrix.flags, '--via-ir')
-        run: forge build --skip test --deny-warnings ${{ matrix.flags }} --contracts 'test/compilation/*'
+      # 3805: "This is a pre-release compiler version, please do not use it in production."
+      - run: forge build -vvvvv --skip test --deny warnings ${{ matrix.prerelease && '--ignored-error-codes 3805' || '' }} ${{ matrix.flags }} --contracts 'test/compilation/*'
 
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         toolchain: [stable, nightly]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: foundry-rs/foundry-toolchain@v1
+      - uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
         with:
           version: ${{ matrix.toolchain }}
       - run: forge --version
-      - run: |
-          if [ "${{ matrix.toolchain }}" = "stable" ]; then
-            forge test -vvv --no-match-path "test/Config.t.sol"
-          else
-            forge test -vvv
-          fi
+      - run: forge test -vvv
 
   fmt:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: foundry-rs/foundry-toolchain@v1
+      - uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
       - run: forge --version
       - run: forge fmt --check
 
   typos:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: crate-ci/typos@85f62a8a84f939ae994ab3763f01a0296d61a7ee # v1
+      - uses: crate-ci/typos@bbaefadf97b0ec5fdc942684b647f1a6ab250274 # v1.46.0
+
+  codeql:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@e46ed2cbd01164d986452f91f178727624ae40d7 # v4.35.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@e46ed2cbd01164d986452f91f178727624ae40d7 # v4.35.3
+        with:
+          category: "/language:${{matrix.language}}"
 
   ci-success:
     runs-on: ubuntu-latest
     if: always()
-    permissions: {}
     needs:
+      - build-matrix
       - build
       - test
       - fmt
       - typos
+      - codeql
     timeout-minutes: 10
     steps:
       - name: Decide whether the needed jobs succeeded or failed
