@@ -1,7 +1,5 @@
 name: CI
-
 permissions: {}
-
 on:
   workflow_dispatch:
   pull_request:
@@ -60,7 +58,16 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.build-matrix.outputs.matrix) }}
+      matrix:
+        toolchain: [stable, nightly]
+        flags:
+          - ''
+          - --via-ir
+          - --use solc:0.8.33 --via-ir
+          - --use solc:0.8.33
+          - --use solc:0.8.13 --via-ir
+          - --use solc:0.8.13
+      
     steps:
       - uses: actions/checkout@v6
         with:
