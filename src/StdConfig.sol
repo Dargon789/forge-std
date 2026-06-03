@@ -35,7 +35,12 @@ contract StdConfig {
 
     VmSafe private constant vm = VmSafe(address(uint160(uint256(keccak256("hevm cheat code")))));
 
+<<<<<<< HEAD
     uint8 private constant NUM_TYPES = 7;
+=======
+    /// @dev Types: `bool`, `address`, `bytes32`, `uint`, `int`, `string`, `bytes`.
+    uint8 private constant _NUM_TYPES = 7;
+>>>>>>> upstream/master
 
     // -- ERRORS ---------------------------------------------------------------
 
@@ -109,7 +114,7 @@ contract StdConfig {
             }
 
             // Iterate through all the available `TypeKind`s (except `None`) to create the sub-section paths
-            for (uint8 t = 1; t <= NUM_TYPES; t++) {
+            for (uint8 t = 1; t <= _NUM_TYPES; t++) {
                 TypeKind ty = TypeKind(t);
                 string memory typePath = string.concat("$.", chain_key, ".", ty.toTomlKey());
 
