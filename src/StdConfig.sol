@@ -4,11 +4,19 @@ pragma solidity ^0.8.13;
 import {VmSafe} from "./Vm.sol";
 import {Variable, Type, TypeKind, LibVariable} from "./LibVariable.sol";
 
+<<<<<<< HEAD
+=======
+/// @notice  A contract that parses a toml configuration file and loads its
+>>>>>>> upstream/master
 ///          variables into storage, automatically casting them, on deployment.
 ///
 /// @dev     This contract assumes a toml structure where top-level keys
 ///          represent chain ids or aliases. Under each chain key, variables are
 ///          organized by type in separate sub-tables like `[<chain>.<type>]`, where
+<<<<<<< HEAD
+=======
+///          type must be: `bool`, `address`, `bytes32`, `uint`, `int`, `string`, or `bytes`.
+>>>>>>> upstream/master
 ///
 ///          Supported format:
 ///          ```
@@ -35,7 +43,12 @@ contract StdConfig {
 
     VmSafe private constant vm = VmSafe(address(uint160(uint256(keccak256("hevm cheat code")))));
 
+<<<<<<< HEAD
     uint8 private constant NUM_TYPES = 7;
+=======
+    /// @dev Types: `bool`, `address`, `bytes32`, `uint`, `int`, `string`, `bytes`.
+    uint8 private constant _NUM_TYPES = 7;
+>>>>>>> upstream/master
 
     // -- ERRORS ---------------------------------------------------------------
 
@@ -72,6 +85,10 @@ contract StdConfig {
     /// @notice Reads the TOML file and iterates through each top-level key, which is
     ///         assumed to be a chain name or ID. For each chain, it caches its RPC
     ///         endpoint and all variables defined in typed sub-tables like `[<chain>.<type>]`,
+<<<<<<< HEAD
+=======
+    ///         where type must be: `bool`, `address`, `bytes32`, `uint`, `int`, `string`, or `bytes`.
+>>>>>>> upstream/master
     ///
     ///         The constructor attempts to parse each variable first as a single value,
     ///         and if that fails, as an array of that type. If a variable cannot be
@@ -99,6 +116,10 @@ contract StdConfig {
             uint256 chainId = resolveChainId(chain_key);
             _chainKeys.push(chain_key);
 
+<<<<<<< HEAD
+=======
+            // Cache the configured RPC endpoint for that chain.
+>>>>>>> upstream/master
             // Falls back to `[rpc_endpoints]`. Panics if no rpc endpoint is configured.
             try vm.parseTomlString(content, string.concat("$.", chain_key, ".endpoint_url")) returns (
                 string memory url
@@ -109,7 +130,11 @@ contract StdConfig {
             }
 
             // Iterate through all the available `TypeKind`s (except `None`) to create the sub-section paths
+<<<<<<< HEAD
             for (uint8 t = 1; t <= NUM_TYPES; t++) {
+=======
+            for (uint8 t = 1; t <= _NUM_TYPES; t++) {
+>>>>>>> upstream/master
                 TypeKind ty = TypeKind(t);
                 string memory typePath = string.concat("$.", chain_key, ".", ty.toTomlKey());
 
@@ -316,6 +341,28 @@ contract StdConfig {
         return get(vm.getChainId(), key);
     }
 
+<<<<<<< HEAD
+=======
+    /// @dev    Checks the existence of a variable for a given chain ID and key, and returns a boolean.
+    ///         Example: `bool hasKey = config.exists(1, "my_key");`
+    ///
+    /// @param chain_id The chain ID to check.
+    /// @param key The variable key name.
+    /// @return `bool` indicating whether a variable with the given key exists.
+    function exists(uint256 chain_id, string memory key) public view returns (bool) {
+        return _dataOf[chain_id][key].length > 0;
+    }
+
+    /// @dev    Checks the existence of a variable for the current chain id and a given key, and returns a boolean.
+    ///         Example: `bool hasKey = config.exists("my_key");`
+    ///
+    /// @param key The variable key name.
+    /// @return `bool` indicating whether a variable with the given key exists.
+    function exists(string memory key) public view returns (bool) {
+        return exists(vm.getChainId(), key);
+    }
+
+>>>>>>> upstream/master
     /// @notice Returns the numerical chain ids for all configured chains.
     function getChainIds() public view returns (uint256[] memory) {
         string[] memory keys = _chainKeys;

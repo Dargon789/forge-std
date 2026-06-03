@@ -11,8 +11,13 @@ on:
 
 env:
   SOLC_MINIMUM: "0.8.13"
+<<<<<<< HEAD
   SOLC_LATEST: "0.8.34"
   SOLC_PRERELEASE: "0.8.35-pre.1"
+=======
+  SOLC_LATEST: "0.8.35"
+  SOLC_PRERELEASE: ""
+>>>>>>> upstream/master
 
 jobs:
   build-matrix:
@@ -42,12 +47,23 @@ jobs:
             done
           done
           # prerelease (nightly only, svm-rs is not up to date on stable)
+<<<<<<< HEAD
           for flags in \
             "--use solc:${PRERELEASE}" \
             "--use solc:${PRERELEASE} --via-ir"
           do
             matrix+='{"toolchain":"nightly","flags":"'"$flags"'","prerelease":true},'
           done
+=======
+          if [ -n "$PRERELEASE" ]; then
+            for flags in \
+              "--use solc:${PRERELEASE}" \
+              "--use solc:${PRERELEASE} --via-ir"
+            do
+              matrix+='{"toolchain":"nightly","flags":"'"$flags"'","prerelease":true},'
+            done
+          fi
+>>>>>>> upstream/master
           matrix="${matrix%,}]}"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
@@ -62,10 +78,17 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.build-matrix.outputs.matrix) }}
     steps:
+<<<<<<< HEAD
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: foundry-rs/foundry-toolchain@v1
+=======
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
+>>>>>>> upstream/master
         with:
           version: ${{ matrix.toolchain }}
       - run: forge --version
@@ -82,10 +105,17 @@ jobs:
       matrix:
         toolchain: [stable, nightly]
     steps:
+<<<<<<< HEAD
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: foundry-rs/foundry-toolchain@v1
+=======
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
+>>>>>>> upstream/master
         with:
           version: ${{ matrix.toolchain }}
       - run: forge --version
@@ -97,10 +127,17 @@ jobs:
     permissions:
       contents: read
     steps:
+<<<<<<< HEAD
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: foundry-rs/foundry-toolchain@v1
+=======
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
+>>>>>>> upstream/master
       - run: forge --version
       - run: forge fmt --check
 
@@ -110,10 +147,17 @@ jobs:
     permissions:
       contents: read
     steps:
+<<<<<<< HEAD
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: crate-ci/typos@02ea592e44b3a53c302f697cddca7641cd051c3d # v1
+=======
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: crate-ci/typos@5374cbf686e897b15713110e233094e2874de7ef # v1.46.1
+>>>>>>> upstream/master
 
   codeql:
     name: Analyze (${{ matrix.language }})
@@ -130,16 +174,28 @@ jobs:
             build-mode: none
     steps:
       - name: Checkout repository
+<<<<<<< HEAD
         uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
+=======
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4.35.4
+>>>>>>> upstream/master
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
       - name: Perform CodeQL Analysis
+<<<<<<< HEAD
         uses: github/codeql-action/analyze@v4
+=======
+        uses: github/codeql-action/analyze@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4.35.4
+>>>>>>> upstream/master
         with:
           category: "/language:${{matrix.language}}"
 
