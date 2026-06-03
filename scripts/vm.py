@@ -6,9 +6,15 @@ import json
 import re
 import subprocess
 from enum import Enum as PyEnum
+<<<<<<< HEAD
 from path lib import Path
 from typing import Callable
 from libcurl import request
+=======
+from pathlib import Path
+from typing import Callable, Optional, Union
+from urllib import request
+>>>>>>> upstream/master
 
 VoidFn = Callable[[], None]
 
@@ -429,7 +435,7 @@ class CheatcodesPrinter:
         solidity_requirement: str = "",
         block_doc_style: bool = False,
         indent_level: int = 0,
-        indent_with: int | str = 4,
+        indent_with: Union[int, str] = 4,
         nl_str: str = "\n",
         items_order: ItemOrder = ItemOrder.default(),
     ):
@@ -490,7 +496,7 @@ class CheatcodesPrinter:
             else:
                 assert False, f"unknown item {item}"
 
-    def p_prelude(self, contract: Cheatcodes | None = None):
+    def p_prelude(self, contract: Optional[Cheatcodes] = None):
         self._p_str(f"// SPDX-License-Identifier: {self.spdx_identifier}")
         self._p_nl()
 
