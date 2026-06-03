@@ -4,8 +4,3 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-<<<<<<< HEAD
-=======
-    cooldown:
-      default-days: 7
->>>>>>> upstream/master
