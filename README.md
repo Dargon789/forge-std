@@ -162,6 +162,8 @@ contract Storage {
     }
 }
 ```
+### stdCheats
+
 #### Example usage:
 
 ```solidity
