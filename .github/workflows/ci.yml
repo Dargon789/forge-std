@@ -9,8 +9,8 @@ on:
 
 env:
   SOLC_MINIMUM: "0.8.13"
-  SOLC_LATEST: "0.8.35"
-  SOLC_PRERELEASE: ""
+  SOLC_LATEST: "0.8.34"
+  SOLC_PRERELEASE: "0.8.35-pre.1"
 
 jobs:
   build-matrix:
@@ -40,14 +40,12 @@ jobs:
             done
           done
           # prerelease (nightly only, svm-rs is not up to date on stable)
-          if [ -n "$PRERELEASE" ]; then
-            for flags in \
-              "--use solc:${PRERELEASE}" \
-              "--use solc:${PRERELEASE} --via-ir"
-            do
-              matrix+='{"toolchain":"nightly","flags":"'"$flags"'","prerelease":true},'
-            done
-          fi
+          for flags in \
+            "--use solc:${PRERELEASE}" \
+            "--use solc:${PRERELEASE} --via-ir"
+          do
+            matrix+='{"toolchain":"nightly","flags":"'"$flags"'","prerelease":true},'
+          done
           matrix="${matrix%,}]}"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
@@ -62,10 +60,10 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.build-matrix.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
+      - uses: foundry-rs/foundry-toolchain@v1
         with:
           version: ${{ matrix.toolchain }}
       - run: forge --version
@@ -82,10 +80,10 @@ jobs:
       matrix:
         toolchain: [stable, nightly]
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
+      - uses: foundry-rs/foundry-toolchain@v1
         with:
           version: ${{ matrix.toolchain }}
       - run: forge --version
@@ -97,10 +95,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
+      - uses: foundry-rs/foundry-toolchain@v1
       - run: forge --version
       - run: forge fmt --check
 
@@ -110,10 +108,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: crate-ci/typos@5374cbf686e897b15713110e233094e2874de7ef # v1.46.1
+      - uses: crate-ci/typos@02ea592e44b3a53c302f697cddca7641cd051c3d # v1
 
   codeql:
     name: Analyze (${{ matrix.language }})
@@ -130,16 +128,16 @@ jobs:
             build-mode: none
     steps:
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{matrix.language}}"
 
