@@ -254,7 +254,7 @@ interface VmSafe {
         bool reverted;
     }
 
-    /// Gas used. Returned by `lastCallGas`.
+    /// Gas used. Returned by `lastCallGas` and `lastFrameGas`.
     struct Gas {
         // The gas limit of the call.
         uint64 gasLimit;
@@ -437,6 +437,22 @@ interface VmSafe {
     /// The signature covers namespace || message for domain separation.
     /// Returns a 64-byte Ed25519 signature.
     function signEd25519(bytes calldata namespace, bytes calldata message, bytes32 privateKey)
+        external
+        pure
+        returns (bytes memory signature);
+
+    /// Signs `digest` as a Tempo V2 keychain signature for `account` using a secp256k1 access key.
+    /// Returns the encoded signature bytes accepted by `SignatureVerifier.verifyKeychain`.
+    function signKeychain(uint256 privateKey, address account, bytes32 digest)
+        external
+        pure
+        returns (bytes memory signature);
+
+    /// Signs `digest` as a Tempo V2 keychain signature for `account` using a root or admin secp256k1 key.
+    /// Returns the encoded signature bytes accepted by `SignatureVerifier.verifyKeychainAdmin`.
+    /// The supplied `digest` should already be domain-separated with chain ID, contract address,
+    /// and account address.
+    function signKeychainAdmin(uint256 privateKey, address account, bytes32 digest)
         external
         pure
         returns (bytes memory signature);
@@ -729,8 +745,11 @@ interface VmSafe {
     /// Returns `false` on non-Tempo networks.
     function isImplicitlyApproved(address spender) external view returns (bool implicitlyApproved);
 
-    /// Gets the gas used in the last call from the callee perspective.
-    function lastCallGas() external view returns (Gas memory gas);
+    /// Returns true if isolated test execution is enabled.
+    function isIsolateMode() external view returns (bool result);
+
+    /// Gets the gas used in the last call or create from the callee perspective.
+    function lastFrameGas() external view returns (Gas memory gas);
 
     /// Loads a storage slot from an address.
     function load(address target, bytes32 slot) external view returns (bytes32 data);
@@ -793,6 +812,10 @@ interface VmSafe {
     /// Stops recording storage reads and writes.
     function stopRecord() external;
 
+    /// DEPRECATED: use `lastFrameGas` instead.
+    /// Gets the gas used in the last call from the callee perspective.
+    function lastCallGas() external view returns (Gas memory gas);
+
     // ======== Filesystem ========
 
     /// Closes file for reading, resetting the offset and allowing to read it from beginning with readLine.
@@ -817,12 +840,14 @@ interface VmSafe {
     function currentFilePath() external view returns (string memory path);
 
     /// Deploys a contract from an artifact file. Takes in the relative path to the json file or the path to the
-    /// artifact in the form of <path>:<contract>:<version> where <contract> and <version> parts are optional.
+    /// artifact in the form of <path>:<contract>:<version> or <path>:<contract>:<profile> where <contract> and
+    /// <version>/<profile> parts are optional.
     /// Reverts if the target artifact contains unlinked library placeholders.
     function deployCode(string calldata artifactPath) external returns (address deployedAddress);
 
     /// Deploys a contract from an artifact file. Takes in the relative path to the json file or the path to the
-    /// artifact in the form of <path>:<contract>:<version> where <contract> and <version> parts are optional.
+    /// artifact in the form of <path>:<contract>:<version> or <path>:<contract>:<profile> where <contract> and
+    /// <version>/<profile> parts are optional.
     /// Reverts if the target artifact contains unlinked library placeholders.
     /// Additionally accepts abi-encoded constructor arguments.
     function deployCode(string calldata artifactPath, bytes calldata constructorArgs)
@@ -830,13 +855,15 @@ interface VmSafe {
         returns (address deployedAddress);
 
     /// Deploys a contract from an artifact file. Takes in the relative path to the json file or the path to the
-    /// artifact in the form of <path>:<contract>:<version> where <contract> and <version> parts are optional.
+    /// artifact in the form of <path>:<contract>:<version> or <path>:<contract>:<profile> where <contract> and
+    /// <version>/<profile> parts are optional.
     /// Reverts if the target artifact contains unlinked library placeholders.
     /// Additionally accepts `msg.value`.
     function deployCode(string calldata artifactPath, uint256 value) external returns (address deployedAddress);
 
     /// Deploys a contract from an artifact file. Takes in the relative path to the json file or the path to the
-    /// artifact in the form of <path>:<contract>:<version> where <contract> and <version> parts are optional.
+    /// artifact in the form of <path>:<contract>:<version> or <path>:<contract>:<profile> where <contract> and
+    /// <version>/<profile> parts are optional.
     /// Reverts if the target artifact contains unlinked library placeholders.
     /// Additionally accepts abi-encoded constructor arguments and `msg.value`.
     function deployCode(string calldata artifactPath, bytes calldata constructorArgs, uint256 value)
@@ -844,12 +871,14 @@ interface VmSafe {
         returns (address deployedAddress);
 
     /// Deploys a contract from an artifact file, using the CREATE2 salt. Takes in the relative path to the json file or the path to the
-    /// artifact in the form of <path>:<contract>:<version> where <contract> and <version> parts are optional.
+    /// artifact in the form of <path>:<contract>:<version> or <path>:<contract>:<profile> where <contract> and
+    /// <version>/<profile> parts are optional.
     /// Reverts if the target artifact contains unlinked library placeholders.
     function deployCode(string calldata artifactPath, bytes32 salt) external returns (address deployedAddress);
 
     /// Deploys a contract from an artifact file, using the CREATE2 salt. Takes in the relative path to the json file or the path to the
-    /// artifact in the form of <path>:<contract>:<version> where <contract> and <version> parts are optional.
+    /// artifact in the form of <path>:<contract>:<version> or <path>:<contract>:<profile> where <contract> and
+    /// <version>/<profile> parts are optional.
     /// Reverts if the target artifact contains unlinked library placeholders.
     /// Additionally accepts abi-encoded constructor arguments.
     function deployCode(string calldata artifactPath, bytes calldata constructorArgs, bytes32 salt)
@@ -857,7 +886,8 @@ interface VmSafe {
         returns (address deployedAddress);
 
     /// Deploys a contract from an artifact file, using the CREATE2 salt. Takes in the relative path to the json file or the path to the
-    /// artifact in the form of <path>:<contract>:<version> where <contract> and <version> parts are optional.
+    /// artifact in the form of <path>:<contract>:<version> or <path>:<contract>:<profile> where <contract> and
+    /// <version>/<profile> parts are optional.
     /// Reverts if the target artifact contains unlinked library placeholders.
     /// Additionally accepts `msg.value`.
     function deployCode(string calldata artifactPath, uint256 value, bytes32 salt)
@@ -865,7 +895,8 @@ interface VmSafe {
         returns (address deployedAddress);
 
     /// Deploys a contract from an artifact file, using the CREATE2 salt. Takes in the relative path to the json file or the path to the
-    /// artifact in the form of <path>:<contract>:<version> where <contract> and <version> parts are optional.
+    /// artifact in the form of <path>:<contract>:<version> or <path>:<contract>:<profile> where <contract> and
+    /// <version>/<profile> parts are optional.
     /// Reverts if the target artifact contains unlinked library placeholders.
     /// Additionally accepts abi-encoded constructor arguments and `msg.value`.
     function deployCode(string calldata artifactPath, bytes calldata constructorArgs, uint256 value, bytes32 salt)
@@ -911,11 +942,14 @@ interface VmSafe {
         returns (BroadcastTxSummary[] memory);
 
     /// Gets the creation bytecode from an artifact file. Takes in the relative path to the json file or the path to the
-    /// artifact in the form of <path>:<contract>:<version> where <contract> and <version> parts are optional.
+    /// artifact in the form of <path>:<contract>:<version> or <path>:<contract>:<profile> where <contract> and
+    /// <version>/<profile> parts are optional. Use <profile> to select artifacts compiled with a specific profile
+    /// from foundry.toml.
     function getCode(string calldata artifactPath) external view returns (bytes memory creationBytecode);
 
     /// Gets the deployed bytecode from an artifact file. Takes in the relative path to the json file or the path to the
-    /// artifact in the form of <path>:<contract>:<version> where <contract> and <version> parts are optional.
+    /// artifact in the form of <path>:<contract>:<version> or <path>:<contract>:<profile> where <contract> and
+    /// <version>/<profile> parts are optional.
     function getDeployedCode(string calldata artifactPath) external view returns (bytes memory runtimeBytecode);
 
     /// Returns the most recent deployment for the current `chainId`.
@@ -1931,7 +1965,7 @@ interface VmSafe {
     /// * requires previous binding generation with `forge bind-json`.
     /// * bindings will be retrieved from the path configured in `foundry.toml`.
     /// 2. String representation of the type (i.e. "Foo(Bar bar) Bar(uint256 baz)").
-    /// * Note: the cheatcode will use the canonical type even if the input is malformated
+    /// * Note: the cheatcode will use the canonical type even if the input is malformed
     /// with the wrong order of elements or with extra whitespaces.
     function eip712HashStruct(string calldata typeNameOrDefinition, bytes calldata abiEncodedData)
         external
@@ -1955,7 +1989,7 @@ interface VmSafe {
     /// * requires previous binding generation with `forge bind-json`.
     /// * bindings will be retrieved from the path configured in `foundry.toml`.
     /// 2. String representation of the type (i.e. "Foo(Bar bar) Bar(uint256 baz)").
-    /// * Note: the cheatcode will output the canonical type even if the input is malformated
+    /// * Note: the cheatcode will output the canonical type even if the input is malformed
     /// with the wrong order of elements or with extra whitespaces.
     function eip712HashType(string calldata typeNameOrDefinition) external pure returns (bytes32 typeHash);
 
@@ -2300,11 +2334,11 @@ interface Vm is VmSafe {
     /// This bypasses the token admin check, but still validates the URI against T5 constraints.
     function setTip20LogoURI(address token, string calldata newLogoURI) external;
 
-    /// Snapshot capture the gas usage of the last call by name from the callee perspective.
-    function snapshotGasLastCall(string calldata name) external returns (uint256 gasUsed);
+    /// Snapshot capture the gas usage of the last call or create by name from the callee perspective.
+    function snapshotGasLastFrame(string calldata name) external returns (uint256 gasUsed);
 
-    /// Snapshot capture the gas usage of the last call by name in a group from the callee perspective.
-    function snapshotGasLastCall(string calldata group, string calldata name) external returns (uint256 gasUsed);
+    /// Snapshot capture the gas usage of the last call or create by name in a group from the callee perspective.
+    function snapshotGasLastFrame(string calldata group, string calldata name) external returns (uint256 gasUsed);
 
     /// Snapshot the current state of the evm.
     /// Returns the ID of the snapshot that was created.
@@ -2380,6 +2414,14 @@ interface Vm is VmSafe {
     /// `revertTo` is being deprecated in favor of `revertToState`. It will be removed in future versions.
     function revertTo(uint256 snapshotId) external returns (bool success);
 
+    /// DEPRECATED: use `snapshotGasLastFrame` instead.
+    /// Snapshot capture the gas usage of the last call by name from the callee perspective.
+    function snapshotGasLastCall(string calldata name) external returns (uint256 gasUsed);
+
+    /// DEPRECATED: use `snapshotGasLastFrame` instead.
+    /// Snapshot capture the gas usage of the last call by name in a group from the callee perspective.
+    function snapshotGasLastCall(string calldata group, string calldata name) external returns (uint256 gasUsed);
+
     /// `snapshot` is being deprecated in favor of `snapshotState`. It will be removed in future versions.
     function snapshot() external returns (uint256 snapshotId);
 
@@ -2444,6 +2486,9 @@ interface Vm is VmSafe {
     /// Prepare an expected log with (bool checkTopic1, bool checkTopic2, bool checkTopic3, bool checkData.).
     /// Call this function, then emit an event, then call a function. Internally after the call, we check if
     /// logs were emitted in the expected order with the expected topics and data (as specified by the booleans).
+    /// Must be placed immediately before the call you want to assert on. If the next call reverts and the
+    /// revert is caught by the caller (low-level call or try/catch), the expectation remains active and may
+    /// be satisfied by a log emitted from a later call.
     function expectEmit(bool checkTopic1, bool checkTopic2, bool checkTopic3, bool checkData) external;
 
     /// Same as the previous method, but also checks supplied address against emitting contract.
@@ -2452,6 +2497,9 @@ interface Vm is VmSafe {
     /// Prepare an expected log with all topic and data checks enabled.
     /// Call this function, then emit an event, then call a function. Internally after the call, we check if
     /// logs were emitted in the expected order with the expected topics and data.
+    /// Must be placed immediately before the call you want to assert on. If the next call reverts and the
+    /// revert is caught by the caller (low-level call or try/catch), the expectation remains active and may
+    /// be satisfied by a log emitted from a later call.
     function expectEmit() external;
 
     /// Same as the previous method, but also checks supplied address against emitting contract.
@@ -2476,6 +2524,14 @@ interface Vm is VmSafe {
     /// Expect a given number of logs from a specific emitter with all topic and data checks enabled.
     function expectEmit(address emitter, uint64 count) external;
 
+    /// Expects a call to `SignatureVerifier.verifyKeychainAdmin(account, digest, signature)`.
+    /// The supplied `digest` should already be domain-separated with chain ID, contract address,
+    /// and account address.
+    function expectKeychainAdminVerified(address account, bytes32 digest, bytes calldata signature) external;
+
+    /// Expects a call to `SignatureVerifier.verifyKeychain(account, digest, signature)`.
+    function expectKeychainVerified(address account, bytes32 digest, bytes calldata signature) external;
+
     /// Expects a TIP-20 `LogoURIUpdated(address indexed updater, string newLogoURI)` event.
     function expectLogoURIUpdated(address token, address updater, string calldata newLogoURI) external;
 
@@ -2483,6 +2539,7 @@ interface Vm is VmSafe {
     function expectPartialRevert(bytes4 revertData) external;
 
     /// Expects an error on next call to reverter address, that starts with the revert data.
+    /// See `expectRevert(address)` for `reverter` matching semantics.
     function expectPartialRevert(bytes4 revertData, address reverter) external;
 
     /// Expects an error on next call with any revert data.
@@ -2492,21 +2549,35 @@ interface Vm is VmSafe {
     function expectRevert(bytes4 revertData) external;
 
     /// Expects a `count` number of reverts from the upcoming calls from the reverter address that match the revert data.
+    /// See `expectRevert(address)` for `reverter` matching semantics.
     function expectRevert(bytes4 revertData, address reverter, uint64 count) external;
 
     /// Expects a `count` number of reverts from the upcoming calls from the reverter address that exactly match the revert data.
+    /// See `expectRevert(address)` for `reverter` matching semantics.
     function expectRevert(bytes calldata revertData, address reverter, uint64 count) external;
 
     /// Expects an error on next call that exactly matches the revert data.
     function expectRevert(bytes calldata revertData) external;
 
     /// Expects an error with any revert data on next call to reverter address.
+    /// The `reverter` argument is matched against the address associated with
+    /// the frame that produced the revert:
+    /// - For a CALL: the address that was called.
+    /// - For a CREATE / CREATE2: the would-be deployed address of the failed
+    /// deployment (computed from the deployer + nonce, or salt + initcode).
+    /// For a single expected revert, the innermost reverting frame wins in
+    /// nested CALL, CREATE, or mixed chains. With `count > 1`, nested
+    /// CREATE / CREATE2 chains apply the same rule independently to each
+    /// iteration; nested CALL chains keep their existing
+    /// outermost-call-per-iteration behavior.
     function expectRevert(address reverter) external;
 
     /// Expects an error from reverter address on next call, with any revert data.
+    /// See `expectRevert(address)` for `reverter` matching semantics.
     function expectRevert(bytes4 revertData, address reverter) external;
 
     /// Expects an error from reverter address on next call, that exactly matches the revert data.
+    /// See `expectRevert(address)` for `reverter` matching semantics.
     function expectRevert(bytes calldata revertData, address reverter) external;
 
     /// Expects a `count` number of reverts from the upcoming calls with any revert data or reverter.
@@ -2519,6 +2590,7 @@ interface Vm is VmSafe {
     function expectRevert(bytes calldata revertData, uint64 count) external;
 
     /// Expects a `count` number of reverts from the upcoming calls from the reverter address.
+    /// See `expectRevert(address)` for `reverter` matching semantics.
     function expectRevert(address reverter, uint64 count) external;
 
     /// Only allows memory writes to offsets [0x00, 0x60) ∪ [min, max) in the current subcontext. If any other
