@@ -40,6 +40,8 @@ contract StdConfig {
     /// @dev Types: `bool`, `address`, `bytes32`, `uint`, `int`, `string`, `bytes`.
     uint8 private constant _NUM_TYPES = 7;
 
+    bytes16 private constant _HEX_DIGITS = "0123456789abcdef";
+
     // -- ERRORS ---------------------------------------------------------------
 
     error AlreadyInitialized(string key);
@@ -47,6 +49,7 @@ contract StdConfig {
     error ChainNotInitialized(uint256 chainId);
     error UnableToParseVariable(string key);
     error WriteToFileInForbiddenCtxt();
+    error MissingRpcEndpoint(uint256 chainId);
 
     // -- STORAGE (CACHE FROM CONFIG FILE) ------------------------------------
 
@@ -104,13 +107,17 @@ contract StdConfig {
             _chainKeys.push(chain_key);
 
             // Cache the configured RPC endpoint for that chain.
-            // Falls back to `[rpc_endpoints]`. Panics if no rpc endpoint is configured.
+            // Falls back to `[rpc_endpoints]`. A chain section may exist only to carry
+            // config values, in which case no endpoint is needed, so a missing one is
+            // deferred to `getRpcUrl` instead of failing the whole load here.
             try vm.parseTomlString(content, string.concat("$.", chain_key, ".endpoint_url")) returns (
                 string memory url
             ) {
                 _rpcOf[chainId] = vm.resolveEnv(url);
             } catch {
-                _rpcOf[chainId] = vm.resolveEnv(vm.rpcUrl(chain_key));
+                try vm.rpcUrl(chain_key) returns (string memory url) {
+                    _rpcOf[chainId] = vm.resolveEnv(url);
+                } catch {}
             }
 
             // Iterate through all the available `TypeKind`s (except `None`) to create the sub-section paths
@@ -282,9 +289,37 @@ contract StdConfig {
         }
     }
 
-    /// @dev Wraps a string in double quotes for JSON compatibility.
+    /// @dev Encodes a string as a JSON string literal, escaping quotes, backslashes and control characters.
     function _quote(string memory s) private pure returns (string memory) {
-        return string.concat('"', s, '"');
+        bytes memory raw = bytes(s);
+        uint256 len = raw.length + 2;
+        for (uint256 i = 0; i < raw.length; i++) {
+            bytes1 c = raw[i];
+            if (c == '"' || c == "\\") len += 1;
+            else if (uint8(c) < 0x20) len += 5;
+        }
+
+        bytes memory out = new bytes(len);
+        uint256 n = 0;
+        out[n++] = '"';
+        for (uint256 i = 0; i < raw.length; i++) {
+            bytes1 c = raw[i];
+            if (c == '"' || c == "\\") {
+                out[n++] = "\\";
+                out[n++] = c;
+            } else if (uint8(c) < 0x20) {
+                out[n++] = "\\";
+                out[n++] = "u";
+                out[n++] = "0";
+                out[n++] = "0";
+                out[n++] = _HEX_DIGITS[uint8(c) >> 4];
+                out[n++] = _HEX_DIGITS[uint8(c) & 0x0f];
+            } else {
+                out[n++] = c;
+            }
+        }
+        out[n] = '"';
+        return string(out);
     }
 
     /// @dev Writes a JSON-formatted value to a specific key in the TOML file.
@@ -353,13 +388,18 @@ contract StdConfig {
     }
 
     /// @notice Reads the RPC URL for a specific chain id.
+    /// @dev    Reverts with `MissingRpcEndpoint` if the chain was configured without an
+    ///         endpoint. Loading such a chain is allowed, since its config values are
+    ///         still usable; only asking for the endpoint is an error.
     function getRpcUrl(uint256 chainId) public view returns (string memory) {
-        return _rpcOf[chainId];
+        string memory url = _rpcOf[chainId];
+        if (bytes(url).length == 0) revert MissingRpcEndpoint(chainId);
+        return url;
     }
 
     /// @notice Reads the RPC URL for the current chain.
     function getRpcUrl() public view returns (string memory) {
-        return _rpcOf[vm.getChainId()];
+        return getRpcUrl(vm.getChainId());
     }
 
     // -- SETTER FUNCTIONS (SINGLE VALUES) -------------------------------------

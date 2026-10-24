@@ -276,6 +276,37 @@ contract ConfigTest is Test, Config {
         vm.removeFile(testConfig);
     }
 
+    function test_writeConfigEscapesStrings() public {
+        string memory testConfig = "./test/fixtures/escape_config.t.toml";
+        vm.copyFile("./test/fixtures/config.toml", testConfig);
+        _loadConfig(testConfig, false);
+
+        // Enable writing to file bypassing the context check.
+        vm.store(address(config), bytes32(uint256(5)), bytes32(uint256(1)));
+
+        string memory quoted = 'say "hi"';
+        string memory path = "C:\\tmp\\new";
+        string memory multiline = "line one\nline two";
+
+        config.set(1, "quoted", quoted);
+        config.set(1, "path", path);
+
+        string[] memory values = new string[](2);
+        values[0] = quoted;
+        values[1] = multiline;
+        config.set(1, "escaped_array", values);
+
+        string memory content = vm.readFile(testConfig);
+        assertEq(vm.parseTomlString(content, "$.mainnet.string.quoted"), quoted);
+        assertEq(vm.parseTomlString(content, "$.mainnet.string.path"), path);
+        string[] memory onDisk = vm.parseTomlStringArray(content, "$.mainnet.string.escaped_array");
+        assertEq(onDisk.length, 2);
+        assertEq(onDisk[0], quoted);
+        assertEq(onDisk[1], multiline);
+
+        vm.removeFile(testConfig);
+    }
+
     function test_writeUpdatesBackToFile() public {
         // Create a temporary copy of the config file to avoid modifying the original.
         string memory originalConfig = "./test/fixtures/config.toml";
@@ -377,5 +408,52 @@ contract ConfigTest is Test, Config {
         vm.expectRevert(abi.encodeWithSelector(StdConfig.UnableToParseVariable.selector, "bad_value"));
         new StdConfig(badParseConfig, false);
         vm.removeFile(badParseConfig);
+    }
+
+    function test_loadConfigWithoutRpcEndpoint() public {
+        // A chain section may exist only to carry config values. Loading it should not
+        // require an endpoint, since nothing on the `_loadConfig` path ever reads one.
+        string memory configOnly = "./test/fixtures/config_no_endpoint.toml";
+        vm.writeFile(
+            configOnly,
+            string.concat(
+                "[mainnet]\n",
+                "endpoint_url = \"https://ethereum.reth.rs/rpc\"\n",
+                "\n",
+                "# No endpoint_url, and no matching entry in `[rpc_endpoints]`.\n",
+                "[optimism.uint]\n",
+                "some_number = 7\n"
+            )
+        );
+
+        _loadConfig(configOnly, false);
+
+        assertEq(config.getChainIds().length, 2, "both chains should load");
+        assertEq(config.get(10, "some_number").toUint256(), 7, "config values stay readable");
+        assertEq(config.getRpcUrl(1), "https://ethereum.reth.rs/rpc", "configured endpoints still resolve");
+
+        vm.removeFile(configOnly);
+    }
+
+    function testRevert_MissingRpcEndpoint() public {
+        // Loading a chain without an endpoint is fine; asking for the endpoint is not.
+        string memory configOnly = "./test/fixtures/config_no_endpoint_revert.toml";
+        vm.writeFile(
+            configOnly,
+            string.concat(
+                "[mainnet]\n",
+                "endpoint_url = \"https://ethereum.reth.rs/rpc\"\n",
+                "\n",
+                "[optimism.uint]\n",
+                "some_number = 7\n"
+            )
+        );
+
+        _loadConfig(configOnly, false);
+
+        vm.expectRevert(abi.encodeWithSelector(StdConfig.MissingRpcEndpoint.selector, uint256(10)));
+        config.getRpcUrl(10);
+
+        vm.removeFile(configOnly);
     }
 }

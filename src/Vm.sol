@@ -119,6 +119,34 @@ interface VmSafe {
         bool removed;
     }
 
+    /// A Merkle proof for a single storage slot. Part of `EthGetProof`.
+    struct EthStorageProof {
+        // The storage slot.
+        bytes32 key;
+        // The value stored at the slot.
+        uint256 value;
+        // The RLP-encoded trie nodes from the storage root to the slot, root first.
+        bytes[] proof;
+    }
+
+    /// An EIP-1186 account and storage proof. Returned by `eth_getProof`.
+    struct EthGetProof {
+        // The address of the account.
+        address account;
+        // The balance of the account.
+        uint256 balance;
+        // The hash of the account's code.
+        bytes32 codeHash;
+        // The nonce of the account.
+        uint64 nonce;
+        // The root of the account's storage trie.
+        bytes32 storageHash;
+        // The RLP-encoded trie nodes from the state root to the account, root first.
+        bytes[] accountProof;
+        // The proofs for the requested storage slots, in the order they were requested.
+        EthStorageProof[] storageProof;
+    }
+
     /// A single entry in a directory listing. Returned by `readDir`.
     struct DirEntry {
         // The error message, if any.
@@ -254,18 +282,31 @@ interface VmSafe {
         bool reverted;
     }
 
-    /// Gas used. Returned by `lastCallGas` and `lastFrameGas`.
+    /// Gas measured for the last completed call or create frame, from the callee's perspective,
+    /// including nested execution. Isolated transactions include intrinsic gas.
+    /// Regular gas (the EIP's execution gas) and EIP-8037 state gas are reported separately.
+    /// Without EIP-8037, state creation uses the ordinary gas schedule and `gasStateUsed` is zero.
+    /// See <https://eips.ethereum.org/EIPS/eip-8037> and <https://getfoundry.sh/reference/cheatcodes/last-frame-gas>.
     struct Gas {
-        // The gas limit of the call.
+        // Regular gas available to the frame at entry. Excludes the EIP-8037 state gas reservoir.
         uint64 gasLimit;
-        // The total gas used.
+        // Regular gas spent by the frame, before refunds. Excludes EIP-8037 state gas; see `gasStateUsed`.
+        // With isolation, includes intrinsic gas and the regular-gas calldata floor.
         uint64 gasTotalUsed;
-        // DEPRECATED: The amount of gas used for memory expansion. Ref: <https://github.com/foundry-rs/foundry/pull/7934#pullrequestreview-2069236939>
+        // DEPRECATED: always zero. Memory expansion costs are included in `gasTotalUsed`.
+        // Ref: <https://github.com/foundry-rs/foundry/pull/7934#pullrequestreview-2069236939>.
         uint64 gasMemoryUsed;
-        // The amount of gas refunded.
+        // Ordinary refund counter before transaction settlement; finalized for an isolated transaction.
+        // Can be negative in nested frames. State gas refills are already netted into `gasStateUsed`.
         int64 gasRefunded;
-        // The amount of gas remaining.
+        // Regular gas left at frame end. Excludes the EIP-8037 state gas reservoir.
+        // State charges can draw from this allowance, so `gasLimit - gasRemaining` can include state gas.
         uint64 gasRemaining;
+        // Net EIP-8037 state gas: state creation charges minus refills, including nested execution.
+        // Zero without EIP-8037 or if the frame reverted or halted. Can be negative when the frame
+        // undoes state created earlier in the same transaction; use signed arithmetic with `gasTotalUsed`.
+        // Their sum measures net consumption, not the gas limit needed to execute.
+        int64 gasStateUsed;
     }
 
     /// The result of the `stopDebugTraceRecording` call
@@ -326,7 +367,7 @@ interface VmSafe {
     struct PotentialRevert {
         // The allowed origin of the revert opcode; address(0) allows reverts from any address
         address reverter;
-        // When true, only matches on the beginning of the revert data, otherwise, matches on entire revert data
+        // When true, only matches on the first 4 bytes (usually the selector) of the revert data, otherwise, matches on entire revert data
         bool partialMatch;
         // The data to use to match encountered reverts
         bytes revertData;
@@ -379,6 +420,58 @@ interface VmSafe {
         external
         pure
         returns (uint256 privateKey);
+
+    /// Adds the secp256k1 affine points `point1 = (pointX1, pointY1)` and
+    /// `point2 = (pointX2, pointY2)`.
+    /// The point at infinity is represented as `(0, 0)`.
+    function ecAddAffine(uint256 pointX1, uint256 pointY1, uint256 pointX2, uint256 pointY2)
+        external
+        pure
+        returns (uint256 resultX, uint256 resultY);
+
+    /// Adds the secp256k1 projective points `point1 = (pointX1, pointY1, pointZ1)` and
+    /// `point2 = (pointX2, pointY2, pointZ2)`.
+    /// The point at infinity is accepted as `(0, y, 0)` for any non-zero `y` and returned as
+    /// `(0, 1, 0)`. Any other result is normalized to `(x, y, 1)`.
+    function ecAddProjective(
+        uint256 pointX1,
+        uint256 pointY1,
+        uint256 pointZ1,
+        uint256 pointX2,
+        uint256 pointY2,
+        uint256 pointZ2
+    ) external pure returns (uint256 resultX, uint256 resultY, uint256 resultZ);
+
+    /// Converts the secp256k1 affine point `(pointX, pointY)` to projective coordinates.
+    /// The point at infinity is converted from `(0, 0)` to `(0, 1, 0)`.
+    function ecAffineToProjective(uint256 pointX, uint256 pointY)
+        external
+        pure
+        returns (uint256 resultX, uint256 resultY, uint256 resultZ);
+
+    /// Multiplies the secp256k1 affine point `(pointX, pointY)` by `scalar`.
+    /// The scalar is reduced modulo the secp256k1 group order.
+    /// The point at infinity is represented as `(0, 0)`.
+    function ecMulAffine(uint256 pointX, uint256 pointY, uint256 scalar)
+        external
+        pure
+        returns (uint256 resultX, uint256 resultY);
+
+    /// Multiplies the secp256k1 projective point `(pointX, pointY, pointZ)` by `scalar`.
+    /// The scalar is reduced modulo the secp256k1 group order.
+    /// The point at infinity is accepted as `(0, y, 0)` for any non-zero `y` and returned as
+    /// `(0, 1, 0)`. Any other result is normalized to `(x, y, 1)`.
+    function ecMulProjective(uint256 pointX, uint256 pointY, uint256 pointZ, uint256 scalar)
+        external
+        pure
+        returns (uint256 resultX, uint256 resultY, uint256 resultZ);
+
+    /// Converts the secp256k1 projective point `(pointX, pointY, pointZ)` to affine coordinates.
+    /// The point at infinity is converted from `(0, y, 0)` for any non-zero `y` to `(0, 0)`.
+    function ecProjectiveToAffine(uint256 pointX, uint256 pointY, uint256 pointZ)
+        external
+        pure
+        returns (uint256 resultX, uint256 resultY);
 
     /// Derives the Ed25519 public key from a private key.
     function publicKeyEd25519(bytes32 privateKey) external pure returns (bytes32 publicKey);
@@ -668,6 +761,13 @@ interface VmSafe {
         view
         returns (EthGetLogs[] memory logs);
 
+    /// Gets the EIP-1186 account and storage proof of `target` at `blockNumber` from the active fork.
+    /// The proof is fetched from the fork's RPC endpoint and does not reflect local state changes.
+    function eth_getProof(address target, bytes32[] calldata slots, uint256 blockNumber)
+        external
+        view
+        returns (EthGetProof memory proof);
+
     /// Gets the current `block.blobbasefee`.
     /// You should use this instead of `block.blobbasefee` if you use `vm.blobBaseFee`, as `block.blobbasefee` is assumed to be constant across a transaction,
     /// and as a result will get optimized out by the compiler.
@@ -725,6 +825,13 @@ interface VmSafe {
     /// Gets all the recorded logs, in JSON format.
     function getRecordedLogsJson() external view returns (string memory logsJson);
 
+    /// Gets the current `block.slotnum`.
+    /// Use this instead of `block.slotnum` after `vm.rollSlot`, as the compiler assumes
+    /// `block.slotnum` is constant across a transaction and may optimize repeated reads away.
+    /// Not available on EVM versions before Amsterdam.
+    /// If used on unsupported EVM versions it will revert.
+    function getSlotNumber() external view returns (uint64 slotNumber);
+
     /// Returns state diffs from current `vm.startStateDiffRecording` session.
     function getStateDiff() external view returns (string memory diff);
 
@@ -748,7 +855,9 @@ interface VmSafe {
     /// Returns true if isolated test execution is enabled.
     function isIsolateMode() external view returns (bool result);
 
-    /// Gets the gas used in the last call or create from the callee perspective.
+    /// Gets gas measurements for the last completed call or create, from the callee's perspective.
+    /// Unlike `lastCallGas`, CREATE and CREATE2 frames are recorded too. Cheatcode calls are never recorded.
+    /// See `Gas` for field semantics and <https://getfoundry.sh/reference/cheatcodes/last-frame-gas>.
     function lastFrameGas() external view returns (Gas memory gas);
 
     /// Loads a storage slot from an address.
@@ -793,7 +902,7 @@ interface VmSafe {
     /// Records the debug trace during the run.
     function startDebugTraceRecording() external;
 
-    /// Starts recording all map SSTOREs for later retrieval.
+    /// Starts recording mapping SSTOREs for later retrieval.
     function startMappingRecording() external;
 
     /// Record all account accesses as part of CREATE, CALL or SELFDESTRUCT opcodes in order,
@@ -806,14 +915,16 @@ interface VmSafe {
     /// Returns an ordered array of all account accesses from a `vm.startStateDiffRecording` session.
     function stopAndReturnStateDiff() external returns (AccountAccess[] memory accountAccesses);
 
-    /// Stops recording all map SSTOREs for later retrieval and clears the recorded data.
+    /// Stops recording mapping SSTOREs and clears the recorded data.
     function stopMappingRecording() external;
 
     /// Stops recording storage reads and writes.
     function stopRecord() external;
 
     /// DEPRECATED: use `lastFrameGas` instead.
-    /// Gets the gas used in the last call from the callee perspective.
+    /// Gets gas measurements for the last completed call, from the callee's perspective.
+    /// Unlike `lastFrameGas`, CREATE and CREATE2 frames are not recorded; calls made by a constructor are.
+    /// See `Gas` for field semantics.
     function lastCallGas() external view returns (Gas memory gas);
 
     // ======== Filesystem ========
@@ -909,6 +1020,15 @@ interface VmSafe {
     /// Performs a foreign function call via the terminal.
     function ffi(string[] calldata commandInput) external returns (bytes memory result);
 
+    /// Performs a foreign function call via the terminal and decodes the output as hex bytes.
+    function ffiBytes(string[] calldata commandInput) external returns (bytes memory result);
+
+    /// Performs a foreign function call via the terminal and returns the output as a string.
+    function ffiString(string[] calldata commandInput) external returns (string memory result);
+
+    /// Performs a foreign function call via the terminal and parses the output as a `uint256`.
+    function ffiUint(string[] calldata commandInput) external returns (uint256 result);
+
     /// Given a path, query the file system to get information about a file, directory, etc.
     function fsMetadata(string calldata path) external view returns (FsMetadata memory metadata);
 
@@ -965,6 +1085,10 @@ interface VmSafe {
         external
         view
         returns (address[] memory deployedAddresses);
+
+    /// Gets all function selectors from a contract artifact. Takes in the relative path to the json file or the path to the
+    /// artifact in the form of <path>:<contract>:<version> where <contract> and <version> parts are optional.
+    function getSelectors(string calldata artifactPath) external view returns (bytes4[] memory selectors);
 
     /// Returns true if the path exists on disk and is pointing at a directory, else returns false.
     function isDir(string calldata path) external view returns (bool result);
@@ -1059,44 +1183,113 @@ interface VmSafe {
     /// Checks if `key` exists in a JSON object.
     function keyExistsJson(string calldata json, string calldata key) external view returns (bool);
 
-    /// Parses a string of JSON data at `key` and coerces it to `address`.
-    function parseJsonAddress(string calldata json, string calldata key) external pure returns (address);
-
     /// Parses a string of JSON data at `key` and coerces it to `address[]`.
     function parseJsonAddressArray(string calldata json, string calldata key) external pure returns (address[] memory);
 
-    /// Parses a string of JSON data at `key` and coerces it to `bool`.
-    function parseJsonBool(string calldata json, string calldata key) external pure returns (bool);
+    /// Parses a string of JSON data at `key` and coerces it to `address[]`, or returns `defaultValue` if the key does not exist.
+    function parseJsonAddressArray(string calldata json, string calldata key, address[] calldata defaultValue)
+        external
+        pure
+        returns (address[] memory);
+
+    /// Parses a string of JSON data at `key` and coerces it to `address`.
+    function parseJsonAddress(string calldata json, string calldata key) external pure returns (address);
+
+    /// Parses a string of JSON data at `key` and coerces it to `address`, or returns `defaultValue` if the key does not exist.
+    function parseJsonAddress(string calldata json, string calldata key, address defaultValue)
+        external
+        pure
+        returns (address);
+
+    /// Returns the length of the JSON array at `key`.
+    function parseJsonArrayLength(string calldata json, string calldata key) external pure returns (uint256 length);
 
     /// Parses a string of JSON data at `key` and coerces it to `bool[]`.
     function parseJsonBoolArray(string calldata json, string calldata key) external pure returns (bool[] memory);
 
-    /// Parses a string of JSON data at `key` and coerces it to `bytes`.
-    function parseJsonBytes(string calldata json, string calldata key) external pure returns (bytes memory);
+    /// Parses a string of JSON data at `key` and coerces it to `bool[]`, or returns `defaultValue` if the key does not exist.
+    function parseJsonBoolArray(string calldata json, string calldata key, bool[] calldata defaultValue)
+        external
+        pure
+        returns (bool[] memory);
 
-    /// Parses a string of JSON data at `key` and coerces it to `bytes32`.
-    function parseJsonBytes32(string calldata json, string calldata key) external pure returns (bytes32);
+    /// Parses a string of JSON data at `key` and coerces it to `bool`.
+    function parseJsonBool(string calldata json, string calldata key) external pure returns (bool);
+
+    /// Parses a string of JSON data at `key` and coerces it to `bool`, or returns `defaultValue` if the key does not exist.
+    function parseJsonBool(string calldata json, string calldata key, bool defaultValue) external pure returns (bool);
 
     /// Parses a string of JSON data at `key` and coerces it to `bytes32[]`.
     function parseJsonBytes32Array(string calldata json, string calldata key) external pure returns (bytes32[] memory);
 
+    /// Parses a string of JSON data at `key` and coerces it to `bytes32[]`, or returns `defaultValue` if the key does not exist.
+    function parseJsonBytes32Array(string calldata json, string calldata key, bytes32[] calldata defaultValue)
+        external
+        pure
+        returns (bytes32[] memory);
+
+    /// Parses a string of JSON data at `key` and coerces it to `bytes32`.
+    function parseJsonBytes32(string calldata json, string calldata key) external pure returns (bytes32);
+
+    /// Parses a string of JSON data at `key` and coerces it to `bytes32`, or returns `defaultValue` if the key does not exist.
+    function parseJsonBytes32(string calldata json, string calldata key, bytes32 defaultValue)
+        external
+        pure
+        returns (bytes32);
+
     /// Parses a string of JSON data at `key` and coerces it to `bytes[]`.
     function parseJsonBytesArray(string calldata json, string calldata key) external pure returns (bytes[] memory);
 
-    /// Parses a string of JSON data at `key` and coerces it to `int256`.
-    function parseJsonInt(string calldata json, string calldata key) external pure returns (int256);
+    /// Parses a string of JSON data at `key` and coerces it to `bytes[]`, or returns `defaultValue` if the key does not exist.
+    function parseJsonBytesArray(string calldata json, string calldata key, bytes[] calldata defaultValue)
+        external
+        pure
+        returns (bytes[] memory);
+
+    /// Parses a string of JSON data at `key` and coerces it to `bytes`.
+    function parseJsonBytes(string calldata json, string calldata key) external pure returns (bytes memory);
+
+    /// Parses a string of JSON data at `key` and coerces it to `bytes`, or returns `defaultValue` if the key does not exist.
+    function parseJsonBytes(string calldata json, string calldata key, bytes calldata defaultValue)
+        external
+        pure
+        returns (bytes memory);
 
     /// Parses a string of JSON data at `key` and coerces it to `int256[]`.
     function parseJsonIntArray(string calldata json, string calldata key) external pure returns (int256[] memory);
 
+    /// Parses a string of JSON data at `key` and coerces it to `int256[]`, or returns `defaultValue` if the key does not exist.
+    function parseJsonIntArray(string calldata json, string calldata key, int256[] calldata defaultValue)
+        external
+        pure
+        returns (int256[] memory);
+
+    /// Parses a string of JSON data at `key` and coerces it to `int256`.
+    function parseJsonInt(string calldata json, string calldata key) external pure returns (int256);
+
+    /// Parses a string of JSON data at `key` and coerces it to `int256`, or returns `defaultValue` if the key does not exist.
+    function parseJsonInt(string calldata json, string calldata key, int256 defaultValue) external pure returns (int256);
+
     /// Returns an array of all the keys in a JSON object.
     function parseJsonKeys(string calldata json, string calldata key) external pure returns (string[] memory keys);
+
+    /// Parses a string of JSON data at `key` and coerces it to `string[]`.
+    function parseJsonStringArray(string calldata json, string calldata key) external pure returns (string[] memory);
+
+    /// Parses a string of JSON data at `key` and coerces it to `string[]`, or returns `defaultValue` if the key does not exist.
+    function parseJsonStringArray(string calldata json, string calldata key, string[] calldata defaultValue)
+        external
+        pure
+        returns (string[] memory);
 
     /// Parses a string of JSON data at `key` and coerces it to `string`.
     function parseJsonString(string calldata json, string calldata key) external pure returns (string memory);
 
-    /// Parses a string of JSON data at `key` and coerces it to `string[]`.
-    function parseJsonStringArray(string calldata json, string calldata key) external pure returns (string[] memory);
+    /// Parses a string of JSON data at `key` and coerces it to `string`, or returns `defaultValue` if the key does not exist.
+    function parseJsonString(string calldata json, string calldata key, string calldata defaultValue)
+        external
+        pure
+        returns (string memory);
 
     /// Parses a string of JSON data at `key` and coerces it to type array corresponding to `typeDescription`.
     function parseJsonTypeArray(string calldata json, string calldata key, string calldata typeDescription)
@@ -1113,11 +1306,23 @@ interface VmSafe {
         pure
         returns (bytes memory);
 
+    /// Parses a string of JSON data at `key` and coerces it to `uint256[]`.
+    function parseJsonUintArray(string calldata json, string calldata key) external pure returns (uint256[] memory);
+
+    /// Parses a string of JSON data at `key` and coerces it to `uint256[]`, or returns `defaultValue` if the key does not exist.
+    function parseJsonUintArray(string calldata json, string calldata key, uint256[] calldata defaultValue)
+        external
+        pure
+        returns (uint256[] memory);
+
     /// Parses a string of JSON data at `key` and coerces it to `uint256`.
     function parseJsonUint(string calldata json, string calldata key) external pure returns (uint256);
 
-    /// Parses a string of JSON data at `key` and coerces it to `uint256[]`.
-    function parseJsonUintArray(string calldata json, string calldata key) external pure returns (uint256[] memory);
+    /// Parses a string of JSON data at `key` and coerces it to `uint256`, or returns `defaultValue` if the key does not exist.
+    function parseJsonUint(string calldata json, string calldata key, uint256 defaultValue)
+        external
+        pure
+        returns (uint256);
 
     /// ABI-encodes a JSON object.
     function parseJson(string calldata json) external pure returns (bytes memory abiEncodedData);
@@ -1868,44 +2073,110 @@ interface VmSafe {
     /// Checks if `key` exists in a TOML table.
     function keyExistsToml(string calldata toml, string calldata key) external view returns (bool);
 
-    /// Parses a string of TOML data at `key` and coerces it to `address`.
-    function parseTomlAddress(string calldata toml, string calldata key) external pure returns (address);
-
     /// Parses a string of TOML data at `key` and coerces it to `address[]`.
     function parseTomlAddressArray(string calldata toml, string calldata key) external pure returns (address[] memory);
 
-    /// Parses a string of TOML data at `key` and coerces it to `bool`.
-    function parseTomlBool(string calldata toml, string calldata key) external pure returns (bool);
+    /// Parses a string of TOML data at `key` and coerces it to `address[]`, or returns `defaultValue` if the key does not exist.
+    function parseTomlAddressArray(string calldata toml, string calldata key, address[] calldata defaultValue)
+        external
+        pure
+        returns (address[] memory);
+
+    /// Parses a string of TOML data at `key` and coerces it to `address`.
+    function parseTomlAddress(string calldata toml, string calldata key) external pure returns (address);
+
+    /// Parses a string of TOML data at `key` and coerces it to `address`, or returns `defaultValue` if the key does not exist.
+    function parseTomlAddress(string calldata toml, string calldata key, address defaultValue)
+        external
+        pure
+        returns (address);
 
     /// Parses a string of TOML data at `key` and coerces it to `bool[]`.
     function parseTomlBoolArray(string calldata toml, string calldata key) external pure returns (bool[] memory);
 
-    /// Parses a string of TOML data at `key` and coerces it to `bytes`.
-    function parseTomlBytes(string calldata toml, string calldata key) external pure returns (bytes memory);
+    /// Parses a string of TOML data at `key` and coerces it to `bool[]`, or returns `defaultValue` if the key does not exist.
+    function parseTomlBoolArray(string calldata toml, string calldata key, bool[] calldata defaultValue)
+        external
+        pure
+        returns (bool[] memory);
 
-    /// Parses a string of TOML data at `key` and coerces it to `bytes32`.
-    function parseTomlBytes32(string calldata toml, string calldata key) external pure returns (bytes32);
+    /// Parses a string of TOML data at `key` and coerces it to `bool`.
+    function parseTomlBool(string calldata toml, string calldata key) external pure returns (bool);
+
+    /// Parses a string of TOML data at `key` and coerces it to `bool`, or returns `defaultValue` if the key does not exist.
+    function parseTomlBool(string calldata toml, string calldata key, bool defaultValue) external pure returns (bool);
 
     /// Parses a string of TOML data at `key` and coerces it to `bytes32[]`.
     function parseTomlBytes32Array(string calldata toml, string calldata key) external pure returns (bytes32[] memory);
 
+    /// Parses a string of TOML data at `key` and coerces it to `bytes32[]`, or returns `defaultValue` if the key does not exist.
+    function parseTomlBytes32Array(string calldata toml, string calldata key, bytes32[] calldata defaultValue)
+        external
+        pure
+        returns (bytes32[] memory);
+
+    /// Parses a string of TOML data at `key` and coerces it to `bytes32`.
+    function parseTomlBytes32(string calldata toml, string calldata key) external pure returns (bytes32);
+
+    /// Parses a string of TOML data at `key` and coerces it to `bytes32`, or returns `defaultValue` if the key does not exist.
+    function parseTomlBytes32(string calldata toml, string calldata key, bytes32 defaultValue)
+        external
+        pure
+        returns (bytes32);
+
     /// Parses a string of TOML data at `key` and coerces it to `bytes[]`.
     function parseTomlBytesArray(string calldata toml, string calldata key) external pure returns (bytes[] memory);
 
-    /// Parses a string of TOML data at `key` and coerces it to `int256`.
-    function parseTomlInt(string calldata toml, string calldata key) external pure returns (int256);
+    /// Parses a string of TOML data at `key` and coerces it to `bytes[]`, or returns `defaultValue` if the key does not exist.
+    function parseTomlBytesArray(string calldata toml, string calldata key, bytes[] calldata defaultValue)
+        external
+        pure
+        returns (bytes[] memory);
+
+    /// Parses a string of TOML data at `key` and coerces it to `bytes`.
+    function parseTomlBytes(string calldata toml, string calldata key) external pure returns (bytes memory);
+
+    /// Parses a string of TOML data at `key` and coerces it to `bytes`, or returns `defaultValue` if the key does not exist.
+    function parseTomlBytes(string calldata toml, string calldata key, bytes calldata defaultValue)
+        external
+        pure
+        returns (bytes memory);
 
     /// Parses a string of TOML data at `key` and coerces it to `int256[]`.
     function parseTomlIntArray(string calldata toml, string calldata key) external pure returns (int256[] memory);
 
+    /// Parses a string of TOML data at `key` and coerces it to `int256[]`, or returns `defaultValue` if the key does not exist.
+    function parseTomlIntArray(string calldata toml, string calldata key, int256[] calldata defaultValue)
+        external
+        pure
+        returns (int256[] memory);
+
+    /// Parses a string of TOML data at `key` and coerces it to `int256`.
+    function parseTomlInt(string calldata toml, string calldata key) external pure returns (int256);
+
+    /// Parses a string of TOML data at `key` and coerces it to `int256`, or returns `defaultValue` if the key does not exist.
+    function parseTomlInt(string calldata toml, string calldata key, int256 defaultValue) external pure returns (int256);
+
     /// Returns an array of all the keys in a TOML table.
     function parseTomlKeys(string calldata toml, string calldata key) external pure returns (string[] memory keys);
+
+    /// Parses a string of TOML data at `key` and coerces it to `string[]`.
+    function parseTomlStringArray(string calldata toml, string calldata key) external pure returns (string[] memory);
+
+    /// Parses a string of TOML data at `key` and coerces it to `string[]`, or returns `defaultValue` if the key does not exist.
+    function parseTomlStringArray(string calldata toml, string calldata key, string[] calldata defaultValue)
+        external
+        pure
+        returns (string[] memory);
 
     /// Parses a string of TOML data at `key` and coerces it to `string`.
     function parseTomlString(string calldata toml, string calldata key) external pure returns (string memory);
 
-    /// Parses a string of TOML data at `key` and coerces it to `string[]`.
-    function parseTomlStringArray(string calldata toml, string calldata key) external pure returns (string[] memory);
+    /// Parses a string of TOML data at `key` and coerces it to `string`, or returns `defaultValue` if the key does not exist.
+    function parseTomlString(string calldata toml, string calldata key, string calldata defaultValue)
+        external
+        pure
+        returns (string memory);
 
     /// Parses a string of TOML data at `key` and coerces it to type array corresponding to `typeDescription`.
     function parseTomlTypeArray(string calldata toml, string calldata key, string calldata typeDescription)
@@ -1922,11 +2193,23 @@ interface VmSafe {
         pure
         returns (bytes memory);
 
+    /// Parses a string of TOML data at `key` and coerces it to `uint256[]`.
+    function parseTomlUintArray(string calldata toml, string calldata key) external pure returns (uint256[] memory);
+
+    /// Parses a string of TOML data at `key` and coerces it to `uint256[]`, or returns `defaultValue` if the key does not exist.
+    function parseTomlUintArray(string calldata toml, string calldata key, uint256[] calldata defaultValue)
+        external
+        pure
+        returns (uint256[] memory);
+
     /// Parses a string of TOML data at `key` and coerces it to `uint256`.
     function parseTomlUint(string calldata toml, string calldata key) external pure returns (uint256);
 
-    /// Parses a string of TOML data at `key` and coerces it to `uint256[]`.
-    function parseTomlUintArray(string calldata toml, string calldata key) external pure returns (uint256[] memory);
+    /// Parses a string of TOML data at `key` and coerces it to `uint256`, or returns `defaultValue` if the key does not exist.
+    function parseTomlUint(string calldata toml, string calldata key, uint256 defaultValue)
+        external
+        pure
+        returns (uint256);
 
     /// ABI-encodes a TOML table.
     function parseToml(string calldata toml) external pure returns (bytes memory abiEncodedData);
@@ -2157,7 +2440,8 @@ interface Vm is VmSafe {
     /// Reverts if used on unsupported EVM versions.
     function difficulty(uint256 newDifficulty) external;
 
-    /// Dump a genesis JSON file's `allocs` to disk.
+    /// Dumps a genesis JSON file's `allocs` to disk. Accounts created in the current transaction
+    /// are ordered by deployment, followed by the remaining accounts in ascending address order.
     function dumpState(string calldata pathToStateJson) external;
 
     /// Sets an address' code.
@@ -2172,7 +2456,7 @@ interface Vm is VmSafe {
     /// Sets `block.basefee`.
     function fee(uint256 newBasefee) external;
 
-    /// Gets the blockhashes from the current transaction.
+    /// Gets the blobhashes from the current transaction.
     /// Not available on EVM versions before Cancun.
     /// If used on unsupported EVM versions it will revert.
     function getBlobhashes() external view returns (bytes32[] memory hashes);
@@ -2232,6 +2516,19 @@ interface Vm is VmSafe {
     /// Overload to pass the function selector directly `token.approve.selector` instead of `abi.encodeWithSelector(token.approve.selector)`.
     function mockCall(address callee, uint256 msgValue, bytes4 data, bytes calldata returnData) external;
 
+    /// Mocks a call to an address, returning specified data.
+    /// Calldata can either be strict or a partial match, e.g. if you only
+    /// pass a Solidity selector to the expected calldata, then the entire Solidity
+    /// function will be mocked.
+    /// Overload to control whether code is injected into `callee`. The other overloads etch a
+    /// single byte into an empty account to circumvent Solidity's `extcodesize` check, with the
+    /// side effect that unmocked calls to it no longer revert; `injectCode = false` leaves the
+    /// account codeless, so unmocked calls to it revert in the caller. Mocked calls that return
+    /// data still succeed, as Solidity checks `returndatasize()` instead of `extcodesize()` when
+    /// return data is expected, but mocked calls to functions without return values may still
+    /// revert in the caller due to the `extcodesize` check.
+    function mockCall(address callee, bytes calldata data, bytes calldata returnData, bool injectCode) external;
+
     /// Mocks multiple calls to an address, returning specified data for each call.
     function mockCalls(address callee, bytes calldata data, bytes[] calldata returnData) external;
 
@@ -2274,6 +2571,50 @@ interface Vm is VmSafe {
     /// Reads the current `msg.sender` and `tx.origin` from state and reports if there is any active caller modification.
     function readCallers() external view returns (CallerMode callerMode, address msgSender, address txOrigin);
 
+    /// Registers a callback after exact mapping-element SSTOREs rooted at `rootSlot` in `target`'s effective storage account.
+    /// The callback signature is `function(address account, bytes32 computedSlot, bytes32 rootSlot,
+    /// bytes32[] keys, bytes32 oldValue, bytes32 newValue) external`; keys are raw words in
+    /// root-to-leaf order. Only complete 64-byte Keccak chains observed after the latest mapping
+    /// hook registration for `target` in the current top-level execution match; provenance is
+    /// cleared between top-level executions. Resolution follows the complete chain to its terminal
+    /// root and ignores registered intermediate hashes. Offsets, incomplete or unknown chains,
+    /// hashes computed before registration or in an earlier top-level execution, and source layouts
+    /// do not match. The contract that calls this cheatcode receives the callback. Registration
+    /// persists across reverts and replaces the same target/root callback; callback state rolls back
+    /// with its enclosing context, callback reverts propagate, and hooks are suppressed throughout
+    /// callback subtrees. The callback must authenticate `msg.sender == address(vm)` to prevent
+    /// external spoofing. Raw and mapping SSTORE hooks conflict per target, while multiple mapping
+    /// roots may be registered.
+    function registerMappingSstoreHook(address target, bytes32 rootSlot, bytes4 callback) external;
+
+    /// Registers a callback invoked after each SLOAD against `target`'s effective storage account,
+    /// including when its code runs by delegatecall.
+    /// The callback must have the signature `function(address,bytes32,bytes32) external`.
+    /// Registering another callback for the same target and access kind replaces it. Registration
+    /// survives EVM reverts, while callback state follows the enclosing EVM context and rolls back
+    /// with it. Callback reverts propagate through the storage operation. Hooks are suppressed in
+    /// the callback and its entire call subtree. The callback must authenticate
+    /// `msg.sender == address(vm)` to prevent external spoofing. Callback execution is hidden from
+    /// mocks, expectations, log recording, and storage-access recording. It does not inherit
+    /// staticness. The callback runs as an ordinary call frame and consumes one of the 1024
+    /// protocol call-depth slots; a load at the maximum legal call depth can have its callback
+    /// rejected as too deep, propagating as a failure of the load.
+    function registerSloadHook(address target, bytes4 callback) external;
+
+    /// Registers a callback invoked after each SSTORE against `target`'s effective storage account,
+    /// including when its code runs by delegatecall.
+    /// The callback must have the signature `function(address,bytes32,bytes32,bytes32) external`.
+    /// Registering another callback for the same target and access kind replaces it. Registration
+    /// survives EVM reverts, while callback state follows the enclosing EVM context and rolls back
+    /// with it. Callback reverts propagate through the storage operation. Hooks are suppressed in
+    /// the callback and its entire call subtree. The callback must authenticate
+    /// `msg.sender == address(vm)` to prevent external spoofing. Callback execution is hidden from
+    /// mocks, expectations, log recording, and storage-access recording. It does not inherit
+    /// staticness. The callback runs as an ordinary call frame and consumes one of the 1024
+    /// protocol call-depth slots; a store at the maximum legal call depth can have its callback
+    /// rejected as too deep, propagating as a failure of the store.
+    function registerSstoreHook(address target, bytes4 callback) external;
+
     /// Resets the nonce of an account to 0 for EOAs and 1 for contract accounts.
     function resetNonce(address account) external;
 
@@ -2313,6 +2654,11 @@ interface Vm is VmSafe {
     /// Updates the given fork to block number of the given transaction and replays all transaction mined before it in the block.
     function rollFork(uint256 forkId, bytes32 txHash) external;
 
+    /// Sets `block.slotnum` without changing the block number or timestamp.
+    /// Not available on EVM versions before Amsterdam.
+    /// If used on unsupported EVM versions it will revert.
+    function rollSlot(uint64 newSlotNumber) external;
+
     /// Takes a fork identifier created by `createFork` and sets the corresponding forked state as active.
     function selectFork(uint256 forkId) external;
 
@@ -2335,9 +2681,13 @@ interface Vm is VmSafe {
     function setTip20LogoURI(address token, string calldata newLogoURI) external;
 
     /// Snapshot capture the gas usage of the last call or create by name from the callee perspective.
+    /// Without isolation, measures regular counter consumption, including spillover but excluding reservoir-funded state gas.
+    /// Isolated frames with zero net state gas use receipt gas; see <https://getfoundry.sh/reference/cheatcodes/gas-snapshots>.
     function snapshotGasLastFrame(string calldata name) external returns (uint256 gasUsed);
 
     /// Snapshot capture the gas usage of the last call or create by name in a group from the callee perspective.
+    /// Without isolation, measures regular counter consumption, including spillover but excluding reservoir-funded state gas.
+    /// Isolated frames with zero net state gas use receipt gas; see <https://getfoundry.sh/reference/cheatcodes/gas-snapshots>.
     function snapshotGasLastFrame(string calldata group, string calldata name) external returns (uint256 gasUsed);
 
     /// Snapshot the current state of the evm.
@@ -2366,22 +2716,27 @@ interface Vm is VmSafe {
 
     /// Start a snapshot capture of the current gas usage by name.
     /// The group name is derived from the contract name.
+    /// Measures gas consumed from the regular counter, including state spillover but excluding reservoir-funded state gas.
     function startSnapshotGas(string calldata name) external;
 
     /// Start a snapshot capture of the current gas usage by name in a group.
+    /// Measures gas consumed from the regular counter, including state spillover but excluding reservoir-funded state gas.
     function startSnapshotGas(string calldata group, string calldata name) external;
 
     /// Resets subsequent calls' `msg.sender` to be `address(this)`.
     function stopPrank() external;
 
     /// Stop the snapshot capture of the current gas by latest snapshot name, capturing the gas used since the start.
+    /// Measures gas consumed from the regular counter, including state spillover but excluding reservoir-funded state gas.
     function stopSnapshotGas() external returns (uint256 gasUsed);
 
     /// Stop the snapshot capture of the current gas usage by name, capturing the gas used since the start.
     /// The group name is derived from the contract name.
+    /// Measures gas consumed from the regular counter, including state spillover but excluding reservoir-funded state gas.
     function stopSnapshotGas(string calldata name) external returns (uint256 gasUsed);
 
     /// Stop the snapshot capture of the current gas usage by name in a group, capturing the gas used since the start.
+    /// Measures gas consumed from the regular counter, including state spillover but excluding reservoir-funded state gas.
     function stopSnapshotGas(string calldata group, string calldata name) external returns (uint256 gasUsed);
 
     /// Stores a value to an address' storage slot.
@@ -2416,10 +2771,14 @@ interface Vm is VmSafe {
 
     /// DEPRECATED: use `snapshotGasLastFrame` instead.
     /// Snapshot capture the gas usage of the last call by name from the callee perspective.
+    /// Without isolation, measures regular counter consumption, including spillover but excluding reservoir-funded state gas.
+    /// Isolated frames with zero net state gas use receipt gas; see <https://getfoundry.sh/reference/cheatcodes/gas-snapshots>.
     function snapshotGasLastCall(string calldata name) external returns (uint256 gasUsed);
 
     /// DEPRECATED: use `snapshotGasLastFrame` instead.
     /// Snapshot capture the gas usage of the last call by name in a group from the callee perspective.
+    /// Without isolation, measures regular counter consumption, including spillover but excluding reservoir-funded state gas.
+    /// Isolated frames with zero net state gas use receipt gas; see <https://getfoundry.sh/reference/cheatcodes/gas-snapshots>.
     function snapshotGasLastCall(string calldata group, string calldata name) external returns (uint256 gasUsed);
 
     /// `snapshot` is being deprecated in favor of `snapshotState`. It will be removed in future versions.
@@ -2458,6 +2817,10 @@ interface Vm is VmSafe {
 
     /// Expects the deployment of the specified bytecode by the specified address using the CREATE2 opcode
     function expectCreate2(bytes calldata bytecode, address deployer) external;
+
+    /// Expects a delegate call to an address with the specified calldata.
+    /// Calldata can either be a strict or a partial match.
+    function expectDelegateCall(address callee, bytes calldata data) external;
 
     /// Prepare an expected anonymous log with (bool checkTopic1, bool checkTopic2, bool checkTopic3, bool checkData.).
     /// Call this function, then emit an anonymous event, then call a function. Internally after the call, we check if

@@ -22,6 +22,12 @@ struct StdStorage {
 }
 
 library stdStorageSafe {
+    struct FindCallData {
+        bytes32 result;
+        bytes32 shortBytesStorageValue;
+        bytes32[] reads;
+    }
+
     event SlotFound(address who, bytes4 fsig, bytes32 keysHash, uint256 slot);
     event WARNING_UninitedSlot(address who, uint256 slot);
 
@@ -42,13 +48,57 @@ library stdStorageSafe {
         }
     }
 
-    /// @notice Calls the target contract with the configured parameters and returns the success flag and return value.
-    function callTarget(StdStorage storage self) internal view returns (bool, bytes32) {
+    /// @notice Calls the target contract with the configured parameters and returns its raw return data.
+    function callTargetRaw(StdStorage storage self) private view returns (bool, bytes memory) {
         bytes memory cd = abi.encodePacked(self._sig, getCallParams(self));
         (bool success, bytes memory rdat) = self._target.staticcall(cd);
+
+        return (success, rdat);
+    }
+
+    /// @notice Calls the target contract with the configured parameters and returns the success flag and return value.
+    function callTarget(StdStorage storage self) internal view returns (bool, bytes32) {
+        (bool success, bytes memory rdat) = callTargetRaw(self);
         bytes32 result = _bytesToBytes32(rdat, 32 * self._depth);
 
         return (success, result);
+    }
+
+    /// @notice Returns the storage encoding when `rdat` is one non-empty short `bytes` or `string` value.
+    function _parseShortBytesReturn(bytes memory rdat) private pure returns (bytes32) {
+        if (rdat.length != 96 || uint256(_bytesToBytes32(rdat, 0)) != 32) {
+            return bytes32(0);
+        }
+
+        uint256 length = uint256(_bytesToBytes32(rdat, 32));
+        if (length == 0 || length > 31) {
+            return bytes32(0);
+        }
+
+        bytes32 value = _bytesToBytes32(rdat, 64);
+        if (uint256(value) << (length * 8) != 0) {
+            return bytes32(0);
+        }
+
+        return value | bytes32(length * 2);
+    }
+
+    /// @notice Returns whether the payload and length marker match a short `bytes` or `string` storage value.
+    function _matchesShortBytes(bytes32 slotValue, bytes32 expected) private pure returns (bool) {
+        uint256 length = uint8(uint256(expected)) / 2;
+        uint256 mask = (type(uint256).max << ((32 - length) * 8)) | 0xFF;
+        return uint256(slotValue) & mask == uint256(expected);
+    }
+
+    /// @notice Returns whether clearing `slot` makes the configured target return an empty dynamic byte array.
+    function _checkShortBytesSlot(StdStorage storage self, bytes32 slot) private returns (bool) {
+        bytes32 prevSlotValue = vm.load(self._target, slot);
+        vm.store(self._target, slot, bytes32(0));
+        (bool success, bytes memory rdat) = callTargetRaw(self);
+        vm.store(self._target, slot, prevSlotValue);
+
+        return success && rdat.length == 64 && uint256(_bytesToBytes32(rdat, 0)) == 32
+            && uint256(_bytesToBytes32(rdat, 32)) == 0;
     }
 
     /// @notice Returns whether mutating `slot` changes the return value of the configured target call.
@@ -118,29 +168,41 @@ library stdStorageSafe {
             }
             return self.finds[who][fsig][keccak256(abi.encodePacked(params, field_depth))];
         }
-        vm.record();
-        (, bytes32 callResult) = callTarget(self);
-        (bytes32[] memory reads,) = vm.accesses(address(who));
+        FindCallData memory callData;
+        {
+            vm.record();
+            (bool callSuccess, bytes memory rdat) = callTargetRaw(self);
+            callData.result = _bytesToBytes32(rdat, 32 * field_depth);
+            if (callSuccess && field_depth == 0) {
+                callData.shortBytesStorageValue = _parseShortBytesReturn(rdat);
+            }
+            (callData.reads,) = vm.accesses(address(who));
+            vm.stopRecord();
+        }
 
-        if (reads.length == 0) {
+        if (callData.reads.length == 0) {
             revert("stdStorage find(StdStorage): No storage use detected for target.");
         } else {
-            for (uint256 i = reads.length; i > 0;) {
+            for (uint256 i = callData.reads.length; i > 0;) {
                 --i;
-                bytes32 prev = vm.load(who, reads[i]);
+                bytes32 slot = callData.reads[i];
+                bytes32 prev = vm.load(who, slot);
                 if (prev == bytes32(0)) {
-                    emit WARNING_UninitedSlot(who, uint256(reads[i]));
+                    emit WARNING_UninitedSlot(who, uint256(slot));
                 }
 
-                if (!checkSlotMutatesCall(self, reads[i])) {
+                bool shortBytesFound = callData.shortBytesStorageValue != bytes32(0)
+                    && _matchesShortBytes(prev, callData.shortBytesStorageValue) && _checkShortBytesSlot(self, slot);
+
+                if (!shortBytesFound && !checkSlotMutatesCall(self, slot)) {
                     continue;
                 }
 
                 (uint256 offsetLeft, uint256 offsetRight) = (0, 0);
 
-                if (self._enable_packed_slots) {
+                if (!shortBytesFound && self._enable_packed_slots) {
                     bool found;
-                    (found, offsetLeft, offsetRight) = findOffsets(self, reads[i]);
+                    (found, offsetLeft, offsetRight) = findOffsets(self, slot);
                     if (!found) {
                         continue;
                     }
@@ -149,13 +211,22 @@ library stdStorageSafe {
                 // Check that value between found offsets is equal to the current call result
                 uint256 curVal = (uint256(prev) & getMaskByOffsets(offsetLeft, offsetRight)) >> offsetRight;
 
-                if (uint256(callResult) != curVal) {
+                // A getter whose return type is a signed integer narrower than 256 bits
+                // ABI-encodes its value sign-extended, while storage holds only the field's own
+                // bits, so a negative value never matches the slot that holds it. Compare the
+                // return truncated to the field's width. For a full-width field the mask is all
+                // ones and this is a no-op.
+                if (
+                    !shortBytesFound
+                        && (uint256(callData.result) & (getMaskByOffsets(offsetLeft, offsetRight) >> offsetRight))
+                            != curVal
+                ) {
                     continue;
                 }
 
-                emit SlotFound(who, fsig, keccak256(abi.encodePacked(params, field_depth)), uint256(reads[i]));
+                emit SlotFound(who, fsig, keccak256(abi.encodePacked(params, field_depth)), uint256(slot));
                 self.finds[who][fsig][keccak256(abi.encodePacked(params, field_depth))] =
-                    FindData(uint256(reads[i]), offsetLeft, offsetRight, true);
+                    FindData(uint256(slot), offsetLeft, offsetRight, true);
                 break;
             }
         }
@@ -258,8 +329,19 @@ library stdStorageSafe {
     }
 
     /// @notice Reads the found storage slot value as int256.
+    /// @dev A field narrower than 256 bits is stored as its own bits only, so the value is
+    /// sign-extended back to `int256` from the field's width. Full-width fields are unchanged.
     function read_int(StdStorage storage self) internal returns (int256) {
-        return abi.decode(_read(self), (int256));
+        FindData storage data = find(self, false);
+        uint256 offsetLeft = data.offsetLeft;
+        uint256 offsetRight = data.offsetRight;
+        uint256 value = (uint256(vm.load(self._target, bytes32(data.slot))) & getMaskByOffsets(offsetLeft, offsetRight))
+            >> offsetRight;
+        clear(self);
+
+        uint256 shift = offsetLeft + offsetRight;
+        if (shift == 0) return int256(value);
+        return (int256(value) << shift) >> shift;
     }
 
     /// @notice Returns the parent mapping slot index and the key used to reach the found slot.
@@ -458,10 +540,19 @@ library stdStorage {
             find(self, false);
         }
         FindData storage data = self.finds[who][fsig][keccak256(abi.encodePacked(params, field_depth))];
+        uint256 valueToStore = uint256(set);
         if ((data.offsetLeft + data.offsetRight) > 0) {
-            uint256 maxVal = 2 ** (256 - (data.offsetLeft + data.offsetRight));
+            uint256 width = 256 - (data.offsetLeft + data.offsetRight);
+            uint256 maxVal = 2 ** width;
+            // `checked_write_int` sign-extends a negative value to 256 bits, which does not fit
+            // the field even when the number it represents does. Narrow it back when the whole
+            // extension is consistent; the getter still returns the sign-extended form, so the
+            // verification below is unaffected.
+            if (valueToStore >= maxVal && (int256(valueToStore) >> (width - 1)) == -1) {
+                valueToStore &= maxVal - 1;
+            }
             require(
-                uint256(set) < maxVal,
+                valueToStore < maxVal,
                 string(
                     abi.encodePacked(
                         "stdStorage checked_write(StdStorage): Packed slot. We can't fit value greater than ",
@@ -471,7 +562,7 @@ library stdStorage {
             );
         }
         bytes32 curVal = vm.load(who, bytes32(data.slot));
-        bytes32 valToSet = stdStorageSafe.getUpdatedSlotValue(curVal, uint256(set), data.offsetLeft, data.offsetRight);
+        bytes32 valToSet = stdStorageSafe.getUpdatedSlotValue(curVal, valueToStore, data.offsetLeft, data.offsetRight);
 
         vm.store(who, bytes32(data.slot), valToSet);
 
